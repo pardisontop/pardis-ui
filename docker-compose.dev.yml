@@ -1,0 +1,15 @@
+services:
+  pardis-ui:
+    build:
+      context: .
+      target: builder
+    working_dir: /app
+    volumes:
+      - .:/app
+      - ./dev/db:/etc/pardis-ui
+    environment:
+      PARDIS_BIN_FOLDER: /app/dev/bin
+      PARDIS_DB_FOLDER: /etc/pardis-ui
+      PARDIS_LOG_LEVEL: debug
+      PARDIS_DEBUG: "true"
+    command: ["go","run","./main.go"]

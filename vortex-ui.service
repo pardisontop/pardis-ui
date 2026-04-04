@@ -1,0 +1,15 @@
+[Unit]
+Description=pardis-ui Service
+After=network.target
+Wants=network.target
+
+[Service]
+Environment="XRAY_VMESS_AEAD_FORCED=false"
+Type=simple
+WorkingDirectory=/usr/local/pardis-ui/
+ExecStart=/usr/local/pardis-ui/pardis-ui
+ExecReload=kill -USR1 $MAINPID
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
