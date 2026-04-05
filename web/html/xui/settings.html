@@ -128,7 +128,7 @@
                                             </a-col>
                                             <a-col :lg="24" :xl="12">
                                                 <a-input-group compact>
-                                                    <a-input style="width: calc(100% - 80px)" v-model="allSetting.webCertFile" placeholder="/path/to/cert.pem" />
+                                                    <a-input style="width: calc(100% - 80px)" v-model="allSetting.webCertFile" placeholder="/path/to/cert.pem"></a-input>
                                                     <a-button @click="$refs.webCertInput.click()" icon="upload" style="width: 80px">{{ i18n "upload" }}</a-button>
                                                 </a-input-group>
                                                 <input ref="webCertInput" type="file" accept=".pem,.crt,.cer" style="display:none" @change="uploadCert('webCert', $event)" />
@@ -144,7 +144,7 @@
                                             </a-col>
                                             <a-col :lg="24" :xl="12">
                                                 <a-input-group compact>
-                                                    <a-input style="width: calc(100% - 80px)" v-model="allSetting.webKeyFile" placeholder="/path/to/key.pem" />
+                                                    <a-input style="width: calc(100% - 80px)" v-model="allSetting.webKeyFile" placeholder="/path/to/key.pem"></a-input>
                                                     <a-button @click="$refs.webKeyInput.click()" icon="upload" style="width: 80px">{{ i18n "upload" }}</a-button>
                                                 </a-input-group>
                                                 <input ref="webKeyInput" type="file" accept=".pem,.key" style="display:none" @change="uploadCert('webKey', $event)" />
@@ -178,7 +178,7 @@
                                             </a-col>
                                             <a-col :lg="24" :xl="12">
                                                 <a-input-group compact>
-                                                    <a-input style="width: calc(100% - 110px)" v-model="dbFolder" :placeholder="currentDbFolder" />
+                                                    <a-input style="width: calc(100% - 110px)" v-model="dbFolder" :placeholder="currentDbFolder"></a-input>
                                                     <a-button type="primary" style="width: 110px" @click="updateDbFolder" :loading="dbFolderLoading">{{ i18n "pages.settings.dbFolderSave" }}</a-button>
                                                 </a-input-group>
                                                 <div style="margin-top:4px; font-size:12px; opacity:0.6">
@@ -307,7 +307,7 @@
                                             </a-col>
                                             <a-col :lg="24" :xl="12">
                                                 <a-input-group compact>
-                                                    <a-input style="width: calc(100% - 80px)" v-model="allSetting.subCertFile" placeholder="/path/to/cert.pem" />
+                                                    <a-input style="width: calc(100% - 80px)" v-model="allSetting.subCertFile" placeholder="/path/to/cert.pem"></a-input>
                                                     <a-button @click="$refs.subCertInput.click()" icon="upload" style="width: 80px">{{ i18n "upload" }}</a-button>
                                                 </a-input-group>
                                                 <input ref="subCertInput" type="file" accept=".pem,.crt,.cer" style="display:none" @change="uploadCert('subCert', $event)" />
@@ -323,7 +323,7 @@
                                             </a-col>
                                             <a-col :lg="24" :xl="12">
                                                 <a-input-group compact>
-                                                    <a-input style="width: calc(100% - 80px)" v-model="allSetting.subKeyFile" placeholder="/path/to/key.pem" />
+                                                    <a-input style="width: calc(100% - 80px)" v-model="allSetting.subKeyFile" placeholder="/path/to/key.pem"></a-input>
                                                     <a-button @click="$refs.subKeyInput.click()" icon="upload" style="width: 80px">{{ i18n "upload" }}</a-button>
                                                 </a-input-group>
                                                 <input ref="subKeyInput" type="file" accept=".pem,.key" style="display:none" @change="uploadCert('subKey', $event)" />
