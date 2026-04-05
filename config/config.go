@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+const dbFolderConfFile = "db_folder.conf"
+
 //go:embed version
 var version string
 
@@ -72,10 +74,29 @@ func getBaseDir() string {
 	return exeDir
 }
 
+func getDBFolderConfPath() string {
+	return filepath.Join(getBaseDir(), dbFolderConfFile)
+}
+
+func getDBFolderFromConf() string {
+	data, err := os.ReadFile(getDBFolderConfPath())
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+func SetDBFolderPath(folderPath string) error {
+	return os.WriteFile(getDBFolderConfPath(), []byte(folderPath), 0644)
+}
+
 func GetDBFolderPath() string {
-	dbFolderPath := os.Getenv("PARDIS_DB_FOLDER")
-	if dbFolderPath != "" {
-		return dbFolderPath
+	// Priority: env var > config file > platform default
+	if envPath := os.Getenv("PARDIS_DB_FOLDER"); envPath != "" {
+		return envPath
+	}
+	if confPath := getDBFolderFromConf(); confPath != "" {
+		return confPath
 	}
 	if runtime.GOOS == "windows" {
 		return getBaseDir()

@@ -119,12 +119,38 @@
                                     <setting-list-item type="number" title='{{ i18n "pages.settings.panelPort"}}'
                                         desc='{{ i18n "pages.settings.panelPortDesc"}}'
                                         v-model.number="allSetting.webPort"></setting-list-item>
-                                    <setting-list-item type="text" title='{{ i18n "pages.settings.publicKeyPath"}}'
-                                        desc='{{ i18n "pages.settings.publicKeyPathDesc"}}'
-                                        v-model="allSetting.webCertFile"></setting-list-item>
-                                    <setting-list-item type="text" title='{{ i18n "pages.settings.privateKeyPath"}}'
-                                        desc='{{ i18n "pages.settings.privateKeyPathDesc"}}'
-                                        v-model="allSetting.webKeyFile"></setting-list-item>
+                                    <a-list-item>
+                                        <a-row style="padding: 20px">
+                                            <a-col :lg="24" :xl="12">
+                                                <a-list-item-meta title='{{ i18n "pages.settings.publicKeyPath"}}'>
+                                                    <template slot="description">{{ i18n "pages.settings.publicKeyPathDesc"}}</template>
+                                                </a-list-item-meta>
+                                            </a-col>
+                                            <a-col :lg="24" :xl="12">
+                                                <a-input-group compact>
+                                                    <a-input style="width: calc(100% - 80px)" v-model="allSetting.webCertFile" placeholder="/path/to/cert.pem" />
+                                                    <a-button @click="$refs.webCertInput.click()" icon="upload" style="width: 80px">{{ i18n "upload" }}</a-button>
+                                                </a-input-group>
+                                                <input ref="webCertInput" type="file" accept=".pem,.crt,.cer" style="display:none" @change="uploadCert('webCert', $event)" />
+                                            </a-col>
+                                        </a-row>
+                                    </a-list-item>
+                                    <a-list-item>
+                                        <a-row style="padding: 20px">
+                                            <a-col :lg="24" :xl="12">
+                                                <a-list-item-meta title='{{ i18n "pages.settings.privateKeyPath"}}'>
+                                                    <template slot="description">{{ i18n "pages.settings.privateKeyPathDesc"}}</template>
+                                                </a-list-item-meta>
+                                            </a-col>
+                                            <a-col :lg="24" :xl="12">
+                                                <a-input-group compact>
+                                                    <a-input style="width: calc(100% - 80px)" v-model="allSetting.webKeyFile" placeholder="/path/to/key.pem" />
+                                                    <a-button @click="$refs.webKeyInput.click()" icon="upload" style="width: 80px">{{ i18n "upload" }}</a-button>
+                                                </a-input-group>
+                                                <input ref="webKeyInput" type="file" accept=".pem,.key" style="display:none" @change="uploadCert('webKey', $event)" />
+                                            </a-col>
+                                        </a-row>
+                                    </a-list-item>
                                     <setting-list-item type="text" title='{{ i18n "pages.settings.panelUrlPath"}}'
                                         desc='{{ i18n "pages.settings.panelUrlPathDesc"}}'
                                         v-model="allSetting.webBasePath"></setting-list-item>
@@ -143,6 +169,24 @@
                                     <setting-list-item type="text" title='{{ i18n "pages.settings.timeZone"}}'
                                         desc='{{ i18n "pages.settings.timeZoneDesc"}}'
                                         v-model="allSetting.timeLocation"></setting-list-item>
+                                    <a-list-item>
+                                        <a-row style="padding: 20px">
+                                            <a-col :lg="24" :xl="12">
+                                                <a-list-item-meta title='{{ i18n "pages.settings.dbFolder"}}'>
+                                                    <template slot="description">{{ i18n "pages.settings.dbFolderDesc"}}</template>
+                                                </a-list-item-meta>
+                                            </a-col>
+                                            <a-col :lg="24" :xl="12">
+                                                <a-input-group compact>
+                                                    <a-input style="width: calc(100% - 110px)" v-model="dbFolder" :placeholder="currentDbFolder" />
+                                                    <a-button type="primary" style="width: 110px" @click="updateDbFolder" :loading="dbFolderLoading">{{ i18n "pages.settings.dbFolderSave" }}</a-button>
+                                                </a-input-group>
+                                                <div style="margin-top:4px; font-size:12px; opacity:0.6">
+                                                    {{ i18n "pages.settings.dbFolderCurrent" }}: [[ currentDbFolder ]]
+                                                </div>
+                                            </a-col>
+                                        </a-row>
+                                    </a-list-item>
                                     <a-list-item>
                                         <a-row style="padding: 20px">
                                             <a-col :lg="24" :xl="12">
@@ -254,12 +298,38 @@
                                     <setting-list-item type="text" title='{{ i18n "pages.settings.subPath"}}'
                                         desc='{{ i18n "pages.settings.subPathDesc"}}'
                                         v-model="allSetting.subPath"></setting-list-item>
-                                    <setting-list-item type="text" title='{{ i18n "pages.settings.subCertPath"}}'
-                                        desc='{{ i18n "pages.settings.subCertPathDesc"}}'
-                                        v-model="allSetting.subCertFile"></setting-list-item>
-                                    <setting-list-item type="text" title='{{ i18n "pages.settings.subKeyPath"}}'
-                                        desc='{{ i18n "pages.settings.subKeyPathDesc"}}'
-                                        v-model="allSetting.subKeyFile"></setting-list-item>
+                                    <a-list-item>
+                                        <a-row style="padding: 20px">
+                                            <a-col :lg="24" :xl="12">
+                                                <a-list-item-meta title='{{ i18n "pages.settings.subCertPath"}}'>
+                                                    <template slot="description">{{ i18n "pages.settings.subCertPathDesc"}}</template>
+                                                </a-list-item-meta>
+                                            </a-col>
+                                            <a-col :lg="24" :xl="12">
+                                                <a-input-group compact>
+                                                    <a-input style="width: calc(100% - 80px)" v-model="allSetting.subCertFile" placeholder="/path/to/cert.pem" />
+                                                    <a-button @click="$refs.subCertInput.click()" icon="upload" style="width: 80px">{{ i18n "upload" }}</a-button>
+                                                </a-input-group>
+                                                <input ref="subCertInput" type="file" accept=".pem,.crt,.cer" style="display:none" @change="uploadCert('subCert', $event)" />
+                                            </a-col>
+                                        </a-row>
+                                    </a-list-item>
+                                    <a-list-item>
+                                        <a-row style="padding: 20px">
+                                            <a-col :lg="24" :xl="12">
+                                                <a-list-item-meta title='{{ i18n "pages.settings.subKeyPath"}}'>
+                                                    <template slot="description">{{ i18n "pages.settings.subKeyPathDesc"}}</template>
+                                                </a-list-item-meta>
+                                            </a-col>
+                                            <a-col :lg="24" :xl="12">
+                                                <a-input-group compact>
+                                                    <a-input style="width: calc(100% - 80px)" v-model="allSetting.subKeyFile" placeholder="/path/to/key.pem" />
+                                                    <a-button @click="$refs.subKeyInput.click()" icon="upload" style="width: 80px">{{ i18n "upload" }}</a-button>
+                                                </a-input-group>
+                                                <input ref="subKeyInput" type="file" accept=".pem,.key" style="display:none" @change="uploadCert('subKey', $event)" />
+                                            </a-col>
+                                        </a-row>
+                                    </a-list-item>
                                     <setting-list-item type="text" title='{{ i18n "pages.settings.subURI"}}'
                                         desc='{{ i18n "pages.settings.subURIDesc"}}' v-model="allSetting.subURI"
                                         placeholder="(http|https)://domain[:port]/path/"></setting-list-item>
@@ -472,6 +542,9 @@
                 allSetting: new AllSetting(),
                 saveBtnDisable: true,
                 user: {},
+                dbFolder: '',
+                currentDbFolder: '',
+                dbFolderLoading: false,
                 lang: getLang(),
                 remarkModels: { i: 'Inbound', e: 'Email', o: 'Other' },
                 remarkSeparators: [' ', '-', '_', '@', ':', '~', '|', ',', '.', '/'],
@@ -565,6 +638,59 @@
                         app.changeRemarkSample();
                         this.saveBtnDisable = true;
                     }
+                },
+                async getDbFolder() {
+                    const msg = await HttpUtil.get("/pardis/setting/dbFolder");
+                    if (msg.success) {
+                        this.currentDbFolder = msg.obj;
+                        this.dbFolder = '';
+                    }
+                },
+                async updateDbFolder() {
+                    if (!this.dbFolder) {
+                        this.$message.warning('{{ i18n "pages.settings.dbFolderEmpty" }}');
+                        return;
+                    }
+                    this.$confirm({
+                        title: '{{ i18n "pages.settings.dbFolderConfirmTitle" }}',
+                        content: '{{ i18n "pages.settings.dbFolderConfirmDesc" }}',
+                        class: themeSwitcher.currentTheme,
+                        okText: '{{ i18n "confirm" }}',
+                        cancelText: '{{ i18n "cancel" }}',
+                        onOk: async () => {
+                            this.dbFolderLoading = true;
+                            const formData = new FormData();
+                            formData.append('dbFolder', this.dbFolder);
+                            const msg = await HttpUtil.post("/pardis/setting/updateDbFolder", formData);
+                            this.dbFolderLoading = false;
+                            if (msg.success) {
+                                this.currentDbFolder = msg.obj;
+                                this.dbFolder = '';
+                                this.loading(true);
+                                await PromiseUtil.sleep(5000);
+                                window.location.reload();
+                            }
+                        },
+                    });
+                },
+                async uploadCert(certType, event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const formData = new FormData();
+                    formData.append('certType', certType);
+                    formData.append('file', file);
+                    this.loading(true);
+                    const msg = await HttpUtil.post("/pardis/setting/uploadCert", formData);
+                    this.loading(false);
+                    if (msg.success) {
+                        const pathMap = {
+                            webCert: 'webCertFile', webKey: 'webKeyFile',
+                            subCert: 'subCertFile', subKey: 'subKeyFile',
+                        };
+                        this.allSetting[pathMap[certType]] = msg.obj;
+                        this.$message.success('{{ i18n "certUploaded" }}');
+                    }
+                    event.target.value = '';
                 },
                 async updateAllSetting() {
                     this.loading(true);
@@ -806,6 +932,7 @@
             },
             async mounted() {
                 await this.getAllSetting();
+                await this.getDbFolder();
                 while (true) {
                     await PromiseUtil.sleep(1000);
                     this.saveBtnDisable = this.oldAllSetting.equals(this.allSetting);

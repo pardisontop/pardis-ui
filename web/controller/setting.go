@@ -2,8 +2,12 @@ package controller
 
 import (
 	"errors"
+	"io"
+	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/alireza0/pardis-ui/config"
 	"github.com/alireza0/pardis-ui/web/entity"
 	"github.com/alireza0/pardis-ui/web/service"
 	"github.com/alireza0/pardis-ui/web/session"
@@ -38,6 +42,9 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/defaultSettings", a.getDefaultSettings)
 	g.POST("/update", a.updateSetting)
 	g.POST("/updateUser", a.updateUser)
+	g.POST("/uploadCert", a.uploadCert)
+	g.GET("/dbFolder", a.getDbFolder)
+	g.POST("/updateDbFolder", a.updateDbFolder)
 	g.POST("/restartPanel", a.restartPanel)
 	g.GET("/getDefaultJsonConfig", a.getDefaultXrayConfig)
 }
@@ -95,6 +102,117 @@ func (a *SettingController) updateUser(c *gin.Context) {
 		}
 	}
 	jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifyUser"), err)
+}
+
+func (a *SettingController) uploadCert(c *gin.Context) {
+	certType := c.PostForm("certType")
+	validTypes := map[string]bool{
+		"webCert": true, "webKey": true, "subCert": true, "subKey": true,
+	}
+	if !validTypes[certType] {
+		jsonMsg(c, "upload certificate", errors.New("invalid certType"))
+		return
+	}
+
+	file, _, err := c.Request.FormFile("file")
+	if err != nil {
+		jsonMsg(c, "upload certificate", err)
+		return
+	}
+	defer file.Close()
+
+	certsDir := filepath.Join(config.GetDBFolderPath(), "certs")
+	if err := os.MkdirAll(certsDir, 0750); err != nil {
+		jsonMsg(c, "upload certificate", err)
+		return
+	}
+
+	destPath := filepath.Join(certsDir, certType+".pem")
+	dest, err := os.Create(destPath)
+	if err != nil {
+		jsonMsg(c, "upload certificate", err)
+		return
+	}
+	defer dest.Close()
+
+	if _, err := io.Copy(dest, file); err != nil {
+		jsonMsg(c, "upload certificate", err)
+		return
+	}
+
+	switch certType {
+	case "webCert":
+		err = a.settingService.SetCertFile(destPath)
+	case "webKey":
+		err = a.settingService.SetKeyFile(destPath)
+	case "subCert":
+		err = a.settingService.SetSubCertFile(destPath)
+	case "subKey":
+		err = a.settingService.SetSubKeyFile(destPath)
+	}
+	if err != nil {
+		jsonMsg(c, "upload certificate", err)
+		return
+	}
+	jsonObj(c, destPath, nil)
+}
+
+func (a *SettingController) getDbFolder(c *gin.Context) {
+	jsonObj(c, config.GetDBFolderPath(), nil)
+}
+
+func (a *SettingController) updateDbFolder(c *gin.Context) {
+	newFolder := c.PostForm("dbFolder")
+	if newFolder == "" {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), errors.New("db folder path cannot be empty"))
+		return
+	}
+
+	newFolder = filepath.Clean(newFolder)
+	if err := os.MkdirAll(newFolder, 0750); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+
+	currentDBPath := config.GetDBPath()
+	newDBPath := filepath.Join(newFolder, filepath.Base(currentDBPath))
+
+	if filepath.Clean(currentDBPath) != newDBPath {
+		if err := copyFile(currentDBPath, newDBPath); err != nil {
+			jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+			return
+		}
+	}
+
+	if err := config.SetDBFolderPath(newFolder); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+
+	// Reload via SIGHUP (which now also re-inits the DB)
+	if err := a.panelService.RestartPanel(time.Second * 3); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+
+	jsonObj(c, newFolder, nil)
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	return err
 }
 
 func (a *SettingController) restartPanel(c *gin.Context) {

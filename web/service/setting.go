@@ -397,8 +397,16 @@ func (s *SettingService) GetSubCertFile() (string, error) {
 	return s.getString("subCertFile")
 }
 
+func (s *SettingService) SetSubCertFile(subCertFile string) error {
+	return s.setString("subCertFile", subCertFile)
+}
+
 func (s *SettingService) GetSubKeyFile() (string, error) {
 	return s.getString("subKeyFile")
+}
+
+func (s *SettingService) SetSubKeyFile(subKeyFile string) error {
+	return s.setString("subKeyFile", subKeyFile)
 }
 
 func (s *SettingService) GetSubUpdates() (string, error) {

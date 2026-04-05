@@ -83,6 +83,15 @@ func runWebServer() {
 				logger.Warning("stop server err:", err)
 			}
 
+			// Re-initialize DB (path may have changed)
+			if err = database.CloseDB(); err != nil {
+				logger.Warning("close db err:", err)
+			}
+			if err = database.InitDB(config.GetDBPath()); err != nil {
+				log.Println("re-init db err:", err)
+				return
+			}
+
 			server = web.NewServer()
 			global.SetWebServer(server)
 			err = server.Start()
