@@ -9,6 +9,7 @@ import (
 	"github.com/alireza0/pardis-ui/web/session"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type updateUserForm struct {
@@ -78,7 +79,7 @@ func (a *SettingController) updateUser(c *gin.Context) {
 		return
 	}
 	user := session.GetLoginUser(c)
-	if user.Username != form.OldUsername || user.Password != form.OldPassword {
+	if user.Username != form.OldUsername || bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(form.OldPassword)) != nil {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifyUser"), errors.New(I18nWeb(c, "pages.settings.toasts.originalUserPassIncorrect")))
 		return
 	}
@@ -88,9 +89,10 @@ func (a *SettingController) updateUser(c *gin.Context) {
 	}
 	err = a.userService.UpdateUser(user.Id, form.NewUsername, form.NewPassword)
 	if err == nil {
-		user.Username = form.NewUsername
-		user.Password = form.NewPassword
-		session.SetLoginUser(c, user)
+		updatedUser, fetchErr := a.userService.GetFirstUser()
+		if fetchErr == nil {
+			session.SetLoginUser(c, updatedUser)
+		}
 	}
 	jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifyUser"), err)
 }

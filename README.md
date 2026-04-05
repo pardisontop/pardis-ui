@@ -1,10 +1,10 @@
 # pardis-ui
 **An Advanced Web Panel • Built on Xray Core**
 
-![](https://img.shields.io/github/v/release/alireza0/x-ui.svg)
-![](https://img.shields.io/docker/pulls/alireza7/x-ui.svg)
-[![Go Report Card](https://goreportcard.com/badge/github.com/alireza0/x-ui)](https://goreportcard.com/report/github.com/alireza0/x-ui)
-[![Downloads](https://img.shields.io/github/downloads/alireza0/x-ui/total.svg)](https://img.shields.io/github/downloads/alireza0/x-ui/total.svg)
+![](https://img.shields.io/github/v/release/alireza0/pardis-ui.svg)
+![](https://img.shields.io/docker/pulls/alireza7/pardis-ui.svg)
+[![Go Report Card](https://goreportcard.com/badge/github.com/alireza0/pardis-ui)](https://goreportcard.com/report/github.com/alireza0/pardis-ui)
+[![Downloads](https://img.shields.io/github/downloads/alireza0/pardis-ui/total.svg)](https://img.shields.io/github/downloads/alireza0/pardis-ui/total.svg)
 [![License](https://img.shields.io/badge/license-GPL%20V3-blue.svg?longCache=true)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 
 > **Disclaimer:** This project is only for personal learning and communication, please do not use it for illegal purposes, please do not use it in a production environment

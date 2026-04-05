@@ -12,6 +12,7 @@ import (
 	"github.com/alireza0/pardis-ui/util/common"
 	"github.com/alireza0/pardis-ui/xray"
 
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -30,9 +31,13 @@ func initUser() error {
 		return err
 	}
 	if count == 0 {
+		hashedPwd, err := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
+		if err != nil {
+			return err
+		}
 		user := &model.User{
 			Username: "admin",
-			Password: "admin",
+			Password: string(hashedPwd),
 		}
 		return db.Create(user).Error
 	}

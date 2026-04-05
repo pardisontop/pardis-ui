@@ -6,7 +6,7 @@ RUN apk --no-cache --update add build-base gcc wget unzip
 COPY . .
 ENV CGO_ENABLED=1
 ENV CGO_CFLAGS="-D_LARGEFILE64_SOURCE"
-RUN go build -ldflags "-w -s" -o build/x-ui main.go
+RUN go build -ldflags "-w -s" -o build/pardis-ui main.go
 RUN chmod +x DockerInitFiles.sh && ./DockerInitFiles.sh "$TARGETARCH"
 
 FROM alpine
@@ -17,5 +17,5 @@ WORKDIR /app
 RUN apk add ca-certificates tzdata
 
 COPY --from=builder /app/build/ /app/
-VOLUME [ "/etc/x-ui" ]
-CMD [ "./x-ui" ]
+VOLUME [ "/etc/pardis-ui" ]
+CMD [ "./pardis-ui" ]
