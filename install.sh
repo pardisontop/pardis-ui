@@ -142,20 +142,20 @@ install_pardis-ui() {
     cd /usr/local/
 
     if [ $# == 0 ]; then
-        last_version=$(curl -Ls "https://api.github.com/repos/alireza0/pardis-ui/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        last_version=$(curl -Ls "https://api.github.com/repos/pardisontop/pardis-ui/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
         if [[ ! -n "$last_version" ]]; then
             echo -e "${red}Failed to fetch pardis-ui version, it maybe due to Github API restrictions, please try it later${plain}"
             exit 1
         fi
         echo -e "Got pardis-ui latest version: ${last_version}, beginning the installation..."
-        wget -N --no-check-certificate -O /usr/local/pardis-ui-linux-$(arch).tar.gz https://github.com/alireza0/pardis-ui/releases/download/${last_version}/pardis-ui-linux-$(arch).tar.gz
+        wget -N --no-check-certificate -O /usr/local/pardis-ui-linux-$(arch).tar.gz https://github.com/pardisontop/pardis-ui/releases/download/${last_version}/pardis-ui-linux-$(arch).tar.gz
         if [[ $? -ne 0 ]]; then
             echo -e "${red}Downloading pardis-ui failed, please be sure that your server can access Github ${plain}"
             exit 1
         fi
     else
         last_version=$1
-        url="https://github.com/alireza0/pardis-ui/releases/download/${last_version}/pardis-ui-linux-$(arch).tar.gz"
+        url="https://github.com/pardisontop/pardis-ui/releases/download/${last_version}/pardis-ui-linux-$(arch).tar.gz"
         echo -e "Beginning to install pardis-ui $1"
         wget -N --no-check-certificate -O /usr/local/pardis-ui-linux-$(arch).tar.gz ${url}
         if [[ $? -ne 0 ]]; then
@@ -182,7 +182,7 @@ install_pardis-ui() {
     fi
     chmod +x pardis-ui bin/xray-linux-$(arch)
     cp -f pardis-ui.service /etc/systemd/system/
-    wget --no-check-certificate -O /usr/bin/pardis-ui https://raw.githubusercontent.com/alireza0/pardis-ui/main/pardis-ui.sh
+    wget --no-check-certificate -O /usr/bin/pardis-ui https://raw.githubusercontent.com/pardisontop/pardis-ui/main/pardis-ui.sh
     chmod +x /usr/local/pardis-ui/pardis-ui.sh
     chmod +x /usr/bin/pardis-ui
     config_after_install

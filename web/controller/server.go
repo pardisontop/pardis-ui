@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/alireza0/pardis-ui/web/global"
-	"github.com/alireza0/pardis-ui/web/service"
+	"github.com/pardisontop/pardis-ui/web/global"
+	"github.com/pardisontop/pardis-ui/web/service"
 
 	"github.com/gin-gonic/gin"
 )

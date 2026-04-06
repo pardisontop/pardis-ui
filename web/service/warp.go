@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/alireza0/pardis-ui/logger"
-	"github.com/alireza0/pardis-ui/util/common"
+	"github.com/pardisontop/pardis-ui/logger"
+	"github.com/pardisontop/pardis-ui/util/common"
 )
 
 type WarpService struct {

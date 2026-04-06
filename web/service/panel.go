@@ -5,7 +5,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/alireza0/pardis-ui/logger"
+	"github.com/pardisontop/pardis-ui/logger"
 )
 
 type PanelService struct{}

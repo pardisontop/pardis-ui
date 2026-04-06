@@ -5,7 +5,7 @@ import (
 	"io/fs"
 	"strings"
 
-	"github.com/alireza0/pardis-ui/logger"
+	"github.com/pardisontop/pardis-ui/logger"
 
 	"github.com/gin-gonic/gin"
 	"github.com/nicksnyder/go-i18n/v2/i18n"

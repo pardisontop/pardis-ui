@@ -3,9 +3,9 @@ package service
 import (
 	"errors"
 
-	"github.com/alireza0/pardis-ui/database"
-	"github.com/alireza0/pardis-ui/database/model"
-	"github.com/alireza0/pardis-ui/logger"
+	"github.com/pardisontop/pardis-ui/database"
+	"github.com/pardisontop/pardis-ui/database/model"
+	"github.com/pardisontop/pardis-ui/logger"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"

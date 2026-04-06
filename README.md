@@ -1,10 +1,10 @@
 # pardis-ui
 **An Advanced Web Panel • Built on Xray Core**
 
-![](https://img.shields.io/github/v/release/alireza0/pardis-ui.svg)
+![](https://img.shields.io/github/v/release/pardisontop/pardis-ui.svg)
 ![](https://img.shields.io/docker/pulls/alireza7/pardis-ui.svg)
-[![Go Report Card](https://goreportcard.com/badge/github.com/alireza0/pardis-ui)](https://goreportcard.com/report/github.com/alireza0/pardis-ui)
-[![Downloads](https://img.shields.io/github/downloads/alireza0/pardis-ui/total.svg)](https://img.shields.io/github/downloads/alireza0/pardis-ui/total.svg)
+[![Go Report Card](https://goreportcard.com/badge/github.com/pardisontop/pardis-ui)](https://goreportcard.com/report/github.com/pardisontop/pardis-ui)
+[![Downloads](https://img.shields.io/github/downloads/pardisontop/pardis-ui/total.svg)](https://img.shields.io/github/downloads/pardisontop/pardis-ui/total.svg)
 [![License](https://img.shields.io/badge/license-GPL%20V3-blue.svg?longCache=true)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 
 > **Disclaimer:** This project is only for personal learning and communication, please do not use it for illegal purposes, please do not use it in a production environment
@@ -36,7 +36,7 @@
 ## Install & Upgrade to Latest Version
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/alireza0/pardis-ui/master/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/pardisontop/pardis-ui/master/install.sh)
 ```
 
 ## Install Legacy Version
@@ -44,7 +44,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/alireza0/pardis-ui/master/inst
 **Step 1:** To install an old version, use following installation command. e.g., version `1.8.0`:
 
 ```sh
-VERSION=1.8.0 && bash <(curl -Ls "https://raw.githubusercontent.com/alireza0/pardis-ui/$VERSION/install.sh") $VERSION
+VERSION=1.8.0 && bash <(curl -Ls "https://raw.githubusercontent.com/pardisontop/pardis-ui/$VERSION/install.sh") $VERSION
 ```
 
 ## Manual Install & Upgrade
@@ -66,7 +66,7 @@ case "${ARCH}" in
   *) PARDIS_ARCH="amd64" ;;
 esac
 
-wget https://github.com/alireza0/pardis-ui/releases/latest/download/pardis-ui-linux-${PARDIS_ARCH}.tar.gz
+wget https://github.com/pardisontop/pardis-ui/releases/latest/download/pardis-ui-linux-${PARDIS_ARCH}.tar.gz
 ```
 
 2. Once the compressed package is downloaded, execute the following commands to install or upgrade pardis-ui:
@@ -110,7 +110,7 @@ curl -fsSL https://get.docker.com | sh
 **Step 2:** Clone the Project Repository:
 
    ```sh
-   git clone https://github.com/alireza0/pardis-ui.git
+   git clone https://github.com/pardisontop/pardis-ui.git
    cd pardis-ui
    ```
 
@@ -411,4 +411,4 @@ Save your changes and restart the Xray Service
 
 ## Stargazers over Time
 
-[![Stargazers over time](https://starchart.cc/alireza0/pardis-ui.svg)](https://starchart.cc/alireza0/pardis-ui)
+[![Stargazers over time](https://starchart.cc/pardisontop/pardis-ui.svg)](https://starchart.cc/pardisontop/pardis-ui)

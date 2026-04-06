@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/alireza0/pardis-ui/logger"
+	"github.com/pardisontop/pardis-ui/logger"
 )
 
 func NewErrorf(format string, a ...interface{}) error {

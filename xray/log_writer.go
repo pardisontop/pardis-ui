@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/alireza0/pardis-ui/logger"
+	"github.com/pardisontop/pardis-ui/logger"
 )
 
 func NewLogWriter() *LogWriter {

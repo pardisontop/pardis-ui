@@ -7,10 +7,10 @@ import (
 	"os"
 	"path"
 
-	"github.com/alireza0/pardis-ui/config"
-	"github.com/alireza0/pardis-ui/database/model"
-	"github.com/alireza0/pardis-ui/util/common"
-	"github.com/alireza0/pardis-ui/xray"
+	"github.com/pardisontop/pardis-ui/config"
+	"github.com/pardisontop/pardis-ui/database/model"
+	"github.com/pardisontop/pardis-ui/util/common"
+	"github.com/pardisontop/pardis-ui/xray"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"

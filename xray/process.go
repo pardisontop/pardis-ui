@@ -12,9 +12,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/alireza0/pardis-ui/config"
-	"github.com/alireza0/pardis-ui/logger"
-	"github.com/alireza0/pardis-ui/util/common"
+	"github.com/pardisontop/pardis-ui/config"
+	"github.com/pardisontop/pardis-ui/logger"
+	"github.com/pardisontop/pardis-ui/util/common"
 )
 
 func GetBinaryName() string {

@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/alireza0/pardis-ui/config"
-	"github.com/alireza0/pardis-ui/web/entity"
-	"github.com/alireza0/pardis-ui/web/service"
-	"github.com/alireza0/pardis-ui/web/session"
+	"github.com/pardisontop/pardis-ui/config"
+	"github.com/pardisontop/pardis-ui/web/entity"
+	"github.com/pardisontop/pardis-ui/web/service"
+	"github.com/pardisontop/pardis-ui/web/session"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"

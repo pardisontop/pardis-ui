@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"github.com/alireza0/pardis-ui/web/service"
+	"github.com/pardisontop/pardis-ui/web/service"
 
 	"github.com/gin-gonic/gin"
 )

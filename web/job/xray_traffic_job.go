@@ -1,8 +1,8 @@
 package job
 
 import (
-	"github.com/alireza0/pardis-ui/logger"
-	"github.com/alireza0/pardis-ui/web/service"
+	"github.com/pardisontop/pardis-ui/logger"
+	"github.com/pardisontop/pardis-ui/web/service"
 )
 
 type XrayTrafficJob struct {

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/alireza0/pardis-ui/database/model"
-	"github.com/alireza0/pardis-ui/web/service"
-	"github.com/alireza0/pardis-ui/web/session"
+	"github.com/pardisontop/pardis-ui/database/model"
+	"github.com/pardisontop/pardis-ui/web/service"
+	"github.com/pardisontop/pardis-ui/web/session"
 
 	"github.com/gin-gonic/gin"
 )

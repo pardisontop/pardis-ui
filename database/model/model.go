@@ -3,8 +3,8 @@ package model
 import (
 	"fmt"
 
-	"github.com/alireza0/pardis-ui/util/json_util"
-	"github.com/alireza0/pardis-ui/xray"
+	"github.com/pardisontop/pardis-ui/util/json_util"
+	"github.com/pardisontop/pardis-ui/xray"
 )
 
 type Protocol string

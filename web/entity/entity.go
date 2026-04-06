@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alireza0/pardis-ui/util/common"
+	"github.com/pardisontop/pardis-ui/util/common"
 )
 
 type Msg struct {

@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alireza0/pardis-ui/database"
-	"github.com/alireza0/pardis-ui/database/model"
-	"github.com/alireza0/pardis-ui/logger"
-	"github.com/alireza0/pardis-ui/util/common"
-	"github.com/alireza0/pardis-ui/util/random"
-	"github.com/alireza0/pardis-ui/web/service"
-	"github.com/alireza0/pardis-ui/xray"
+	"github.com/pardisontop/pardis-ui/database"
+	"github.com/pardisontop/pardis-ui/database/model"
+	"github.com/pardisontop/pardis-ui/logger"
+	"github.com/pardisontop/pardis-ui/util/common"
+	"github.com/pardisontop/pardis-ui/util/random"
+	"github.com/pardisontop/pardis-ui/web/service"
+	"github.com/pardisontop/pardis-ui/xray"
 
 	"github.com/goccy/go-json"
 )

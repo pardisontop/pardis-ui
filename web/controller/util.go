@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/alireza0/pardis-ui/config"
-	"github.com/alireza0/pardis-ui/logger"
-	"github.com/alireza0/pardis-ui/web/entity"
+	"github.com/pardisontop/pardis-ui/config"
+	"github.com/pardisontop/pardis-ui/logger"
+	"github.com/pardisontop/pardis-ui/web/entity"
 
 	"github.com/gin-gonic/gin"
 )

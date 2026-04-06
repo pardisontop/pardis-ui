@@ -19,7 +19,7 @@ Local installation should be performed **only inside a VM or disposable environm
 ### Steps
 
 ```bash
-git clone https://github.com/alireza0/pardis-ui.git
+git clone https://github.com/pardisontop/pardis-ui.git
 # or:
 # git clone https://github.com/<your_fork_name>/pardis-ui.git
 
@@ -80,7 +80,7 @@ sudo dnf install -y golang unzip git wget
 ### Setup panel
 
 ```bash
-git clone https://github.com/alireza0/pardis-ui.git
+git clone https://github.com/pardisontop/pardis-ui.git
 # or:
 # git clone https://github.com/<your_fork_name>/pardis-ui.git
 

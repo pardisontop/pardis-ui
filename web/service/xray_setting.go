@@ -4,8 +4,8 @@ import (
 	_ "embed"
 	"encoding/json"
 
-	"github.com/alireza0/pardis-ui/util/common"
-	"github.com/alireza0/pardis-ui/xray"
+	"github.com/pardisontop/pardis-ui/util/common"
+	"github.com/pardisontop/pardis-ui/xray"
 )
 
 type XraySettingService struct {

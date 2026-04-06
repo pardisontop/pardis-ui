@@ -6,8 +6,8 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/alireza0/pardis-ui/logger"
-	"github.com/alireza0/pardis-ui/xray"
+	"github.com/pardisontop/pardis-ui/logger"
+	"github.com/pardisontop/pardis-ui/xray"
 
 	"go.uber.org/atomic"
 )

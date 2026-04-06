@@ -1,4 +1,4 @@
-module github.com/alireza0/pardis-ui
+module github.com/pardisontop/pardis-ui
 
 go 1.25.7
 

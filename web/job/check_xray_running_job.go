@@ -1,6 +1,6 @@
 package job
 
-import "github.com/alireza0/pardis-ui/web/service"
+import "github.com/pardisontop/pardis-ui/web/service"
 
 type CheckXrayRunningJob struct {
 	xrayService service.XrayService

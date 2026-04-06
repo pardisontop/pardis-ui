@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/alireza0/pardis-ui/logger"
-	"github.com/alireza0/pardis-ui/util/common"
+	"github.com/pardisontop/pardis-ui/logger"
+	"github.com/pardisontop/pardis-ui/util/common"
 
 	"github.com/xtls/xray-core/app/proxyman/command"
 	statsService "github.com/xtls/xray-core/app/stats/command"

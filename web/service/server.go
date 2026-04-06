@@ -17,12 +17,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alireza0/pardis-ui/config"
-	"github.com/alireza0/pardis-ui/database"
-	"github.com/alireza0/pardis-ui/logger"
-	"github.com/alireza0/pardis-ui/util/common"
-	"github.com/alireza0/pardis-ui/util/sys"
-	"github.com/alireza0/pardis-ui/xray"
+	"github.com/pardisontop/pardis-ui/config"
+	"github.com/pardisontop/pardis-ui/database"
+	"github.com/pardisontop/pardis-ui/logger"
+	"github.com/pardisontop/pardis-ui/util/common"
+	"github.com/pardisontop/pardis-ui/util/sys"
+	"github.com/pardisontop/pardis-ui/xray"
 
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/disk"

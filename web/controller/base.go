@@ -3,9 +3,9 @@ package controller
 import (
 	"net/http"
 
-	"github.com/alireza0/pardis-ui/logger"
-	"github.com/alireza0/pardis-ui/web/locale"
-	"github.com/alireza0/pardis-ui/web/session"
+	"github.com/pardisontop/pardis-ui/logger"
+	"github.com/pardisontop/pardis-ui/web/locale"
+	"github.com/pardisontop/pardis-ui/web/session"
 
 	"github.com/gin-gonic/gin"
 )

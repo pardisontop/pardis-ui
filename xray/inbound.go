@@ -3,7 +3,7 @@ package xray
 import (
 	"bytes"
 
-	"github.com/alireza0/pardis-ui/util/json_util"
+	"github.com/pardisontop/pardis-ui/util/json_util"
 )
 
 type InboundConfig struct {

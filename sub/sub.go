@@ -8,12 +8,12 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/alireza0/pardis-ui/config"
-	"github.com/alireza0/pardis-ui/logger"
-	"github.com/alireza0/pardis-ui/util/common"
-	"github.com/alireza0/pardis-ui/web/middleware"
-	"github.com/alireza0/pardis-ui/web/network"
-	"github.com/alireza0/pardis-ui/web/service"
+	"github.com/pardisontop/pardis-ui/config"
+	"github.com/pardisontop/pardis-ui/logger"
+	"github.com/pardisontop/pardis-ui/util/common"
+	"github.com/pardisontop/pardis-ui/web/middleware"
+	"github.com/pardisontop/pardis-ui/web/network"
+	"github.com/pardisontop/pardis-ui/web/service"
 
 	"github.com/gin-gonic/gin"
 )
