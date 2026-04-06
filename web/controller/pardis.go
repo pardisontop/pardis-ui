@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type XUIController struct {
+type PardisController struct {
 	BaseController
 
 	inboundController     *InboundController
@@ -12,13 +12,13 @@ type XUIController struct {
 	xraySettingController *XraySettingController
 }
 
-func NewXUIController(g *gin.RouterGroup) *XUIController {
-	a := &XUIController{}
+func NewPardisController(g *gin.RouterGroup) *PardisController {
+	a := &PardisController{}
 	a.initRouter(g)
 	return a
 }
 
-func (a *XUIController) initRouter(g *gin.RouterGroup) {
+func (a *PardisController) initRouter(g *gin.RouterGroup) {
 	g = g.Group("/pardis")
 	g.Use(a.checkLogin)
 
@@ -32,18 +32,18 @@ func (a *XUIController) initRouter(g *gin.RouterGroup) {
 	a.xraySettingController = NewXraySettingController(g)
 }
 
-func (a *XUIController) index(c *gin.Context) {
+func (a *PardisController) index(c *gin.Context) {
 	html(c, "index.html", "pages.index.title", nil)
 }
 
-func (a *XUIController) inbounds(c *gin.Context) {
+func (a *PardisController) inbounds(c *gin.Context) {
 	html(c, "inbounds.html", "pages.inbounds.title", nil)
 }
 
-func (a *XUIController) settings(c *gin.Context) {
+func (a *PardisController) settings(c *gin.Context) {
 	html(c, "settings.html", "pages.settings.title", nil)
 }
 
-func (a *XUIController) xraySettings(c *gin.Context) {
+func (a *PardisController) xraySettings(c *gin.Context) {
 	html(c, "xray.html", "pages.xray.title", nil)
 }

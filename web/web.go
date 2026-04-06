@@ -84,7 +84,7 @@ type Server struct {
 
 	index  *controller.IndexController
 	server *controller.ServerController
-	xui    *controller.XUIController
+	pardis *controller.PardisController
 	api    *controller.APIController
 
 	xrayService    service.XrayService
@@ -181,7 +181,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	engine.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{basePath + "xui/API/"})))
+	engine.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{basePath + "pardis/API/"})))
 	assetsBasePath := basePath + "assets/"
 
 	store := cookie.NewStore(secret)
@@ -240,7 +240,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 
 	s.index = controller.NewIndexController(g)
 	s.server = controller.NewServerController(g)
-	s.xui = controller.NewXUIController(g)
+	s.pardis = controller.NewPardisController(g)
 	s.api = controller.NewAPIController(g, s.server)
 
 	engine.NoRoute(func(c *gin.Context) {

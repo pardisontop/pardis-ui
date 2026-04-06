@@ -59,14 +59,14 @@ VERSION=1.8.0 && bash <(curl -Ls "https://raw.githubusercontent.com/alireza0/par
 ```sh
 ARCH=$(uname -m)
 case "${ARCH}" in
-  x86_64 | x64 | amd64) XUI_ARCH="amd64" ;;
-  i*86 | x86) XUI_ARCH="386" ;;
-  armv8* | armv8 | arm64 | aarch64) XUI_ARCH="arm64" ;;
-  armv7* | armv7) XUI_ARCH="armv7" ;;
-  *) XUI_ARCH="amd64" ;;
+  x86_64 | x64 | amd64) PARDIS_ARCH="amd64" ;;
+  i*86 | x86) PARDIS_ARCH="386" ;;
+  armv8* | armv8 | arm64 | aarch64) PARDIS_ARCH="arm64" ;;
+  armv7* | armv7) PARDIS_ARCH="armv7" ;;
+  *) PARDIS_ARCH="amd64" ;;
 esac
 
-wget https://github.com/alireza0/pardis-ui/releases/latest/download/pardis-ui-linux-${XUI_ARCH}.tar.gz
+wget https://github.com/alireza0/pardis-ui/releases/latest/download/pardis-ui-linux-${PARDIS_ARCH}.tar.gz
 ```
 
 2. Once the compressed package is downloaded, execute the following commands to install or upgrade pardis-ui:
@@ -74,15 +74,15 @@ wget https://github.com/alireza0/pardis-ui/releases/latest/download/pardis-ui-li
 ```sh
 ARCH=$(uname -m)
 case "${ARCH}" in
-  x86_64 | x64 | amd64) XUI_ARCH="amd64" ;;
-  i*86 | x86) XUI_ARCH="386" ;;
-  armv8* | armv8 | arm64 | aarch64) XUI_ARCH="arm64" ;;
-  armv7* | armv7) XUI_ARCH="armv7" ;;
-  *) XUI_ARCH="amd64" ;;
+  x86_64 | x64 | amd64) PARDIS_ARCH="amd64" ;;
+  i*86 | x86) PARDIS_ARCH="386" ;;
+  armv8* | armv8 | arm64 | aarch64) PARDIS_ARCH="arm64" ;;
+  armv7* | armv7) PARDIS_ARCH="armv7" ;;
+  *) PARDIS_ARCH="amd64" ;;
 esac
 cd /root/
 rm pardis-ui/ /usr/local/pardis-ui/ /usr/bin/pardis-ui -rf
-tar zxvf pardis-ui-linux-${XUI_ARCH}.tar.gz
+tar zxvf pardis-ui-linux-${PARDIS_ARCH}.tar.gz
 chmod +x pardis-ui/pardis-ui pardis-ui/bin/xray-linux-* pardis-ui/pardis-ui.sh
 cp pardis-ui/pardis-ui.sh /usr/bin/pardis-ui
 cp -f pardis-ui/pardis-ui.service /etc/systemd/system/

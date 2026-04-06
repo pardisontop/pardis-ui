@@ -1,7 +1,7 @@
 ---
 
 services:
-  xui:
+  pardis:
     image: alireza7/pardis-ui
     container_name: pardis-ui
     hostname: yourhostname
