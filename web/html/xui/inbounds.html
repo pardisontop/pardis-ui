@@ -955,7 +955,7 @@
                 }
                 data.sniffing = inbound.sniffing.toString();
 
-                await this.submit(`/xui/inbound/update/${dbInbound.id}`, data, inModal);
+                await this.submit(`/pardis/inbound/update/${dbInbound.id}`, data, inModal);
             },
             openAddClient(dbInboundId) {
                 dbInbound = this.dbInbounds.find(row => row.id === dbInboundId);
@@ -1010,14 +1010,14 @@
                     id: dbInboundId,
                     settings: '{"clients": [' + clients.toString() + ']}',
                 };
-                await this.submit(`/xui/inbound/addClient`, data, modal);
+                await this.submit(`/pardis/inbound/addClient`, data, modal);
             },
             async updateClient(client, dbInboundId, clientId) {
                 const data = {
                     id: dbInboundId,
                     settings: '{"clients": [' + client.toString() + ']}',
                 };
-                await this.submit(`/xui/inbound/updateClient/${clientId}`, data, clientModal);
+                await this.submit(`/pardis/inbound/updateClient/${clientId}`, data, clientModal);
             },
             resetTraffic(dbInboundId) {
                 dbInbound = this.dbInbounds.find(row => row.id === dbInboundId);
@@ -1055,10 +1055,10 @@
                         class: themeSwitcher.currentTheme,
                         okText: '{{ i18n "delete"}}',
                         cancelText: '{{ i18n "cancel"}}',
-                        onOk: () => this.submit(`/xui/inbound/${dbInboundId}/delClient/${clientId}`),
+                        onOk: () => this.submit(`/pardis/inbound/${dbInboundId}/delClient/${clientId}`),
                     });
                 } else {
-                    this.submit(`/xui/inbound/${dbInboundId}/delClient/${clientId}`);
+                    this.submit(`/pardis/inbound/${dbInboundId}/delClient/${clientId}`);
                 }
             },
             getClientId(protocol, client) {
@@ -1107,7 +1107,7 @@
             switchEnable(dbInboundId,state) {
                 dbInbound = this.dbInbounds.find(row => row.id === dbInboundId);
                 dbInbound.enable = state;
-                this.submit(`/xui/inbound/update/${dbInboundId}`, dbInbound);
+                this.submit(`/pardis/inbound/update/${dbInboundId}`, dbInbound);
             },
             async switchEnableClient(dbInboundId, client) {
                 this.loading()
