@@ -2,7 +2,7 @@
 
 services:
   pardis:
-    image: alireza7/pardis-ui
+    image: ghcr.io/pardisontop/pardis-ui:latest
     container_name: pardis-ui
     hostname: yourhostname
     volumes:

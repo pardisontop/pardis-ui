@@ -10,7 +10,7 @@ RUN go build -ldflags "-w -s" -o build/pardis-ui main.go
 RUN chmod +x DockerInitFiles.sh && ./DockerInitFiles.sh "$TARGETARCH"
 
 FROM alpine
-LABEL org.opencontainers.image.authors="alireza7@gmail.com"
+LABEL org.opencontainers.image.authors="pardisontop@gmail.com"
 ENV TZ=Asia/Tehran
 WORKDIR /app
 

@@ -2,7 +2,7 @@
 **An Advanced Web Panel • Built on Xray Core**
 
 ![](https://img.shields.io/github/v/release/pardisontop/pardis-ui.svg)
-![](https://img.shields.io/docker/pulls/alireza7/pardis-ui.svg)
+![](https://img.shields.io/docker/pulls/pardisontop/pardis-ui.svg)
 [![Go Report Card](https://goreportcard.com/badge/github.com/pardisontop/pardis-ui)](https://goreportcard.com/report/github.com/pardisontop/pardis-ui)
 [![Downloads](https://img.shields.io/github/downloads/pardisontop/pardis-ui/total.svg)](https://img.shields.io/github/downloads/pardisontop/pardis-ui/total.svg)
 [![License](https://img.shields.io/badge/license-GPL%20V3-blue.svg?longCache=true)](https://www.gnu.org/licenses/gpl-3.0.en.html)
@@ -11,9 +11,9 @@
 
 **If you think this project is helpful to you, you may wish to give a**:star2:
 
-[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/alireza7)
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/pardisontop)
 
-<a href="https://nowpayments.io/donation/alireza7" target="_blank" rel="noreferrer noopener">
+<a href="https://nowpayments.io/donation/pardisontop" target="_blank" rel="noreferrer noopener">
    <img src="https://nowpayments.io/images/embeds/donation-button-black.svg" alt="Crypto donation button by NOWPayments">
 </a>
 
@@ -130,7 +130,7 @@ docker run -itd \
     -v $PWD/db/:/etc/pardis-ui/ \
     -v $PWD/cert/:/root/cert/ \
     --name pardis-ui --restart=unless-stopped \
-    alireza7/pardis-ui:latest
+    ghcr.io/pardisontop/pardis-ui:latest
 ```
 
 update to latest version
