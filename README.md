@@ -265,6 +265,16 @@ docker build -t pardis-ui .
 | PARDIS_DEBUG      |                   `boolean`                    | `false`       |
 | PARDIS_BIN_FOLDER |                    `string`                    | `"bin"`       |
 | PARDIS_DB_FOLDER  |                    `string`                    | `"/etc/pardis-ui"` |
+| PARDIS_DB_TYPE    | `"sqlite"` \| `"mysql"` \| `"mariadb"` \| `"mariadb-galera"` | `"sqlite"` |
+| PARDIS_DB_HOST    |                    `string`                    | `"127.0.0.1"` |
+| PARDIS_DB_PORT    |                    `number`                    | `3306`        |
+| PARDIS_DB_NAME    |                    `string`                    | `"pardis_ui"` |
+| PARDIS_DB_USER    |                    `string`                    | `""`         |
+| PARDIS_DB_PASSWORD|                    `string`                    | `""`         |
+| PARDIS_DB_PARAMS  |                    `string`                    | `"charset=utf8mb4&parseTime=True&loc=Local"` |
+| PARDIS_DB_DSN     |                    `string`                    | `""`         |
+
+MySQL, MariaDB, and MariaDB Galera Cluster use the MySQL-compatible driver. The target database must already exist; the panel creates/migrates its tables on startup.
 
 </details>
 

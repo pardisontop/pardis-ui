@@ -701,25 +701,29 @@ func (t *Tgbot) sendBackup(chatId int64) {
 		return
 	}
 
-	// Update by manually trigger a checkpoint operation
-	err := database.Checkpoint()
-	if err != nil {
-		logger.Warning("Error in trigger a checkpoint operation: ", err)
-	}
-
 	output := t.I18nBot("tgbot.messages.backupTime", "Time=="+time.Now().Format("2006-01-02 15:04:05"))
 	t.SendMsgToTgbot(chatId, output)
 
-	file := tgbotapi.FilePath(config.GetDBPath())
-	msg := tgbotapi.NewDocument(chatId, file)
-	_, err = bot.Send(msg)
-	if err != nil {
-		logger.Warning("Error in uploading backup: ", err)
+	if database.IsSQLite() {
+		// Update by manually trigger a checkpoint operation
+		err := database.Checkpoint()
+		if err != nil {
+			logger.Warning("Error in trigger a checkpoint operation: ", err)
+		}
+
+		file := tgbotapi.FilePath(config.GetDBPath())
+		msg := tgbotapi.NewDocument(chatId, file)
+		_, err = bot.Send(msg)
+		if err != nil {
+			logger.Warning("Error in uploading backup: ", err)
+		}
+	} else {
+		t.SendMsgToTgbot(chatId, "Database file backup is only available when SQLite is active.")
 	}
 
-	file = tgbotapi.FilePath(xray.GetConfigPath())
-	msg = tgbotapi.NewDocument(chatId, file)
-	_, err = bot.Send(msg)
+	file := tgbotapi.FilePath(xray.GetConfigPath())
+	msg := tgbotapi.NewDocument(chatId, file)
+	_, err := bot.Send(msg)
 	if err != nil {
 		logger.Warning("Error in uploading config.json: ", err)
 	}

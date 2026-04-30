@@ -54,13 +54,13 @@ func (s *InboundService) checkPortExist(listen string, port int, ignoreId int) (
 				db.Model(model.Inbound{}).Where(
 					"listen = ?", listen,
 				).Or(
-					"listen = \"\"",
+					"listen = ?", "",
 				).Or(
-					"listen = \"0.0.0.0\"",
+					"listen = ?", "0.0.0.0",
 				).Or(
-					"listen = \"::\"",
+					"listen = ?", "::",
 				).Or(
-					"listen = \"::0\""))
+					"listen = ?", "::0"))
 	}
 	if ignoreId > 0 {
 		db = db.Where("id != ?", ignoreId)
@@ -89,14 +89,44 @@ func (s *InboundService) GetClients(inbound *model.Inbound) ([]model.Client, err
 
 func (s *InboundService) getAllEmails() ([]string, error) {
 	db := database.GetDB()
-	var emails []string
-	err := db.Raw(`
-		SELECT JSON_EXTRACT(client.value, '$.email')
-		FROM inbounds,
-			JSON_EACH(JSON_EXTRACT(inbounds.settings, '$.clients')) AS client
-		`).Scan(&emails).Error
-	if err != nil {
+	var inbounds []*model.Inbound
+	if err := db.Model(model.Inbound{}).Select("settings").Find(&inbounds).Error; err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
+	}
+
+	emails := make([]string, 0)
+	for _, inbound := range inbounds {
+		clients, err := s.GetClients(inbound)
+		if err != nil {
+			return nil, err
+		}
+		for _, client := range clients {
+			if client.Email != "" {
+				emails = append(emails, client.Email)
+			}
+		}
+	}
+	return emails, nil
+}
+
+func (s *InboundService) getClientEmailsByFilter(match func(model.Client) bool) ([]string, error) {
+	db := database.GetDB()
+	var inbounds []*model.Inbound
+	if err := db.Model(model.Inbound{}).Select("settings").Find(&inbounds).Error; err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+
+	emails := make([]string, 0)
+	for _, inbound := range inbounds {
+		clients, err := s.GetClients(inbound)
+		if err != nil {
+			return nil, err
+		}
+		for _, client := range clients {
+			if client.Email != "" && match(client) {
+				emails = append(emails, client.Email)
+			}
+		}
 	}
 	return emails, nil
 }
@@ -1127,14 +1157,16 @@ func (s *InboundService) disableInvalidClients(tx *gorm.DB) (bool, int64, error)
 
 func (s *InboundService) MigrationRemoveOrphanedTraffics() {
 	db := database.GetDB()
-	db.Exec(`
-		DELETE FROM client_traffics
-		WHERE email NOT IN (
-			SELECT JSON_EXTRACT(client.value, '$.email')
-			FROM inbounds,
-				JSON_EACH(JSON_EXTRACT(inbounds.settings, '$.clients')) AS client
-		)
-	`)
+	emails, err := s.getAllEmails()
+	if err != nil {
+		logger.Warningf("failed to collect client emails for traffic migration: %v", err)
+		return
+	}
+	if len(emails) == 0 {
+		db.Where("1 = 1").Delete(xray.ClientTraffic{})
+		return
+	}
+	db.Where("email NOT IN ?", emails).Delete(xray.ClientTraffic{})
 }
 
 func (s *InboundService) AddClientStat(tx *gorm.DB, inboundId int, client *model.Client) error {
@@ -1341,13 +1373,16 @@ func (s *InboundService) DelDepletedClients(id int) (err error) {
 func (s *InboundService) GetClientTrafficTgBot(tgid string, tguname string) ([]*xray.ClientTraffic, error) {
 	db := database.GetDB()
 	var traffics []*xray.ClientTraffic
-	err := db.Model(xray.ClientTraffic{}).Where(`email IN(
-		SELECT JSON_EXTRACT(client.value, '$.email') as email
-		FROM inbounds,
-	  	JSON_EACH(JSON_EXTRACT(inbounds.settings, '$.clients')) AS client
-		WHERE
-	  	JSON_EXTRACT(client.value, '$.tgId') in (?,?)
-		)`, tgid, tguname).Find(&traffics).Error
+	emails, err := s.getClientEmailsByFilter(func(client model.Client) bool {
+		return client.TgID == tgid || client.TgID == tguname
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(emails) == 0 {
+		return traffics, nil
+	}
+	err = db.Model(xray.ClientTraffic{}).Where("email IN ?", emails).Find(&traffics).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			logger.Warning(err)
@@ -1377,13 +1412,18 @@ func (s *InboundService) GetClientTrafficByID(id string) ([]xray.ClientTraffic, 
 	db := database.GetDB()
 	var traffics []xray.ClientTraffic
 
-	err := db.Model(xray.ClientTraffic{}).Where(`email IN(
-		SELECT JSON_EXTRACT(client.value, '$.email') as email
-		FROM inbounds,
-	  	JSON_EACH(JSON_EXTRACT(inbounds.settings, '$.clients')) AS client
-		WHERE
-	  	JSON_EXTRACT(client.value, '$.id') in (?)
-		)`, id).Find(&traffics).Error
+	emails, err := s.getClientEmailsByFilter(func(client model.Client) bool {
+		return client.ID == id
+	})
+	if err != nil {
+		logger.Debug(err)
+		return nil, err
+	}
+	if len(emails) == 0 {
+		return traffics, nil
+	}
+
+	err = db.Model(xray.ClientTraffic{}).Where("email IN ?", emails).Find(&traffics).Error
 
 	if err != nil {
 		logger.Debug(err)
@@ -1459,8 +1499,10 @@ func (s *InboundService) MigrationRequirements() {
 	defer func() {
 		if err == nil {
 			tx.Commit()
-			if dbErr := db.Exec(`VACUUM "main"`).Error; dbErr != nil {
-				logger.Warningf("VACUUM failed: %v", dbErr)
+			if database.IsSQLite() {
+				if dbErr := db.Exec(`VACUUM "main"`).Error; dbErr != nil {
+					logger.Warningf("VACUUM failed: %v", dbErr)
+				}
 			}
 		} else {
 			tx.Rollback()
@@ -1526,43 +1568,39 @@ func (s *InboundService) MigrationRequirements() {
 	tx.Where("inbound_id = 0").Delete(xray.ClientTraffic{})
 
 	// Migrate old MultiDomain to External Proxy
-	var externalProxy []struct {
-		Id             int
-		Port           int
-		StreamSettings []byte
-	}
-	err = tx.Raw(`select id, port, stream_settings
-	from inbounds
-	WHERE protocol in ('vmess','vless','trojan')
-	  AND json_extract(stream_settings, '$.security') = 'tls'
-	  AND json_extract(stream_settings, '$.tlsSettings.settings.domains') IS NOT NULL`).Scan(&externalProxy).Error
-	if err != nil || len(externalProxy) == 0 {
-		return
-	}
-
-	for _, ep := range externalProxy {
+	for _, inbound := range inbounds {
 		var reverses interface{}
 		var stream map[string]interface{}
-		json.Unmarshal(ep.StreamSettings, &stream)
+		if err := json.Unmarshal([]byte(inbound.StreamSettings), &stream); err != nil {
+			continue
+		}
+		if stream["security"] != "tls" {
+			continue
+		}
 		if tlsSettings, ok := stream["tlsSettings"].(map[string]interface{}); ok {
 			if settings, ok := tlsSettings["settings"].(map[string]interface{}); ok {
-				if domains, ok := settings["domains"].([]interface{}); ok {
+				if domains, ok := settings["domains"].([]interface{}); ok && len(domains) > 0 {
 					for _, domain := range domains {
 						if domainMap, ok := domain.(map[string]interface{}); ok {
-							domainMap["forceTls"] = "same"
-							domainMap["port"] = ep.Port
-							domainMap["dest"] = domainMap["domain"].(string)
-							delete(domainMap, "domain")
+							if domain, ok := domainMap["domain"].(string); ok {
+								domainMap["forceTls"] = "same"
+								domainMap["port"] = inbound.Port
+								domainMap["dest"] = domain
+								delete(domainMap, "domain")
+							}
 						}
 					}
+					reverses = settings["domains"]
+					delete(settings, "domains")
 				}
-				reverses = settings["domains"]
-				delete(settings, "domains")
 			}
+		}
+		if reverses == nil {
+			continue
 		}
 		stream["externalProxy"] = reverses
 		newStream, _ := json.MarshalIndent(stream, " ", "  ")
-		tx.Model(model.Inbound{}).Where("id = ?", ep.Id).Update("stream_settings", newStream)
+		tx.Model(model.Inbound{}).Where("id = ?", inbound.Id).Update("stream_settings", newStream)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pardisontop/pardis-ui/config"
+	"github.com/pardisontop/pardis-ui/database"
 	"github.com/pardisontop/pardis-ui/web/entity"
 	"github.com/pardisontop/pardis-ui/web/service"
 	"github.com/pardisontop/pardis-ui/web/session"
@@ -43,6 +44,8 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/update", a.updateSetting)
 	g.POST("/updateUser", a.updateUser)
 	g.POST("/uploadCert", a.uploadCert)
+	g.GET("/dbConfig", a.getDbConfig)
+	g.POST("/updateDbConfig", a.updateDbConfig)
 	g.GET("/dbFolder", a.getDbFolder)
 	g.POST("/updateDbFolder", a.updateDbFolder)
 	g.POST("/restartPanel", a.restartPanel)
@@ -161,7 +164,59 @@ func (a *SettingController) getDbFolder(c *gin.Context) {
 	jsonObj(c, config.GetDBFolderPath(), nil)
 }
 
+func (a *SettingController) getDbConfig(c *gin.Context) {
+	jsonObj(c, config.GetDBConfig().Sanitized(), nil)
+}
+
+func (a *SettingController) updateDbConfig(c *gin.Context) {
+	if config.IsDBConfigFromEnv() {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), errors.New("database configuration is controlled by environment variables"))
+		return
+	}
+
+	newConfig := config.DefaultDBConfig()
+	if err := c.ShouldBind(&newConfig); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+	newConfig = newConfig.Normalized()
+
+	if !newConfig.IsSQLite() && !newConfig.IsMySQLCompatible() {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), errors.New("unsupported database type"))
+		return
+	}
+
+	currentConfig := config.GetDBConfig()
+	if newConfig.Password == "" && currentConfig.Password != "" {
+		newConfig.Password = currentConfig.Password
+	}
+
+	if !newConfig.IsSQLite() {
+		if err := database.TestConfig(newConfig); err != nil {
+			jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+			return
+		}
+	}
+
+	if err := config.SetDBConfig(newConfig); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+
+	if err := a.panelService.RestartPanel(time.Second * 3); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+
+	jsonObj(c, newConfig.Sanitized(), nil)
+}
+
 func (a *SettingController) updateDbFolder(c *gin.Context) {
+	if !config.GetDBConfig().IsSQLite() {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), errors.New("database folder can only be changed when SQLite is active"))
+		return
+	}
+
 	newFolder := c.PostForm("dbFolder")
 	if newFolder == "" {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), errors.New("db folder path cannot be empty"))

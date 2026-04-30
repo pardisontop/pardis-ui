@@ -172,6 +172,46 @@
                                     <a-list-item>
                                         <a-row style="padding: 20px">
                                             <a-col :lg="24" :xl="12">
+                                                <a-list-item-meta title='{{ i18n "pages.settings.dbType"}}'>
+                                                    <template slot="description">{{ i18n "pages.settings.dbTypeDesc"}}</template>
+                                                </a-list-item-meta>
+                                            </a-col>
+                                            <a-col :lg="24" :xl="12">
+                                                <a-select style="width: 100%; margin-bottom: 8px;" v-model="dbConfig.type"
+                                                    :dropdown-class-name="themeSwitcher.currentTheme">
+                                                    <a-select-option v-for="dbType in dbTypes" :value="dbType.value">[[ dbType.label ]]</a-select-option>
+                                                </a-select>
+                                                <template v-if="dbConfig.type !== 'sqlite'">
+                                                    <a-alert type="warning" style="margin-bottom: 8px;"
+                                                        message='{{ i18n "pages.settings.externalDbNotice" }}' show-icon></a-alert>
+                                                    <a-row :gutter="8">
+                                                        <a-col :xs="24" :md="12" style="margin-bottom: 8px;">
+                                                            <a-input v-model="dbConfig.host" placeholder='{{ i18n "pages.settings.dbHost" }}'></a-input>
+                                                        </a-col>
+                                                        <a-col :xs="24" :md="12" style="margin-bottom: 8px;">
+                                                            <a-input-number style="width: 100%;" v-model="dbConfig.port" :min="1" :max="65535" placeholder='{{ i18n "pages.settings.dbPort" }}'></a-input-number>
+                                                        </a-col>
+                                                        <a-col :xs="24" :md="12" style="margin-bottom: 8px;">
+                                                            <a-input v-model="dbConfig.name" placeholder='{{ i18n "pages.settings.dbName" }}'></a-input>
+                                                        </a-col>
+                                                        <a-col :xs="24" :md="12" style="margin-bottom: 8px;">
+                                                            <a-input v-model="dbConfig.user" placeholder='{{ i18n "pages.settings.dbUser" }}'></a-input>
+                                                        </a-col>
+                                                        <a-col :xs="24" :md="12" style="margin-bottom: 8px;">
+                                                            <password-input v-model="dbConfig.password" placeholder='{{ i18n "pages.settings.dbPassword" }}'></password-input>
+                                                        </a-col>
+                                                        <a-col :xs="24" :md="12" style="margin-bottom: 8px;">
+                                                            <a-input v-model="dbConfig.params" placeholder='{{ i18n "pages.settings.dbParams" }}'></a-input>
+                                                        </a-col>
+                                                    </a-row>
+                                                </template>
+                                                <a-button type="primary" @click="updateDbConfig" :loading="dbConfigLoading">{{ i18n "pages.settings.dbConfigSave" }}</a-button>
+                                            </a-col>
+                                        </a-row>
+                                    </a-list-item>
+                                    <a-list-item v-if="dbConfig.type === 'sqlite'">
+                                        <a-row style="padding: 20px">
+                                            <a-col :lg="24" :xl="12">
                                                 <a-list-item-meta title='{{ i18n "pages.settings.dbFolder"}}'>
                                                     <template slot="description">{{ i18n "pages.settings.dbFolderDesc"}}</template>
                                                 </a-list-item-meta>
@@ -545,6 +585,22 @@
                 dbFolder: '',
                 currentDbFolder: '',
                 dbFolderLoading: false,
+                dbConfigLoading: false,
+                dbConfig: {
+                    type: 'sqlite',
+                    host: '127.0.0.1',
+                    port: 3306,
+                    name: 'pardis_ui',
+                    user: '',
+                    password: '',
+                    params: 'charset=utf8mb4&parseTime=True&loc=Local',
+                },
+                dbTypes: [
+                    { value: 'sqlite', label: 'SQLite' },
+                    { value: 'mysql', label: 'MySQL' },
+                    { value: 'mariadb', label: 'MariaDB' },
+                    { value: 'mariadb-galera', label: 'MariaDB Galera Cluster' },
+                ],
                 lang: getLang(),
                 remarkModels: { i: 'Inbound', e: 'Email', o: 'Other' },
                 remarkSeparators: [' ', '-', '_', '@', ':', '~', '|', ',', '.', '/'],
@@ -645,6 +701,38 @@
                         this.currentDbFolder = msg.obj;
                         this.dbFolder = '';
                     }
+                },
+                async getDbConfig() {
+                    const msg = await HttpUtil.get("/pardis/setting/dbConfig");
+                    if (msg.success) {
+                        this.dbConfig = Object.assign({}, this.dbConfig, msg.obj, { password: '' });
+                    }
+                },
+                async updateDbConfig() {
+                    if (this.dbConfig.type !== 'sqlite') {
+                        if (!this.dbConfig.host || !this.dbConfig.name) {
+                            this.$message.warning('{{ i18n "pages.settings.dbConfigEmpty" }}');
+                            return;
+                        }
+                    }
+                    this.$confirm({
+                        title: '{{ i18n "pages.settings.dbConfigConfirmTitle" }}',
+                        content: '{{ i18n "pages.settings.dbConfigConfirmDesc" }}',
+                        class: themeSwitcher.currentTheme,
+                        okText: '{{ i18n "confirm" }}',
+                        cancelText: '{{ i18n "cancel" }}',
+                        onOk: async () => {
+                            this.dbConfigLoading = true;
+                            const msg = await HttpUtil.post("/pardis/setting/updateDbConfig", this.dbConfig);
+                            this.dbConfigLoading = false;
+                            if (msg.success) {
+                                this.dbConfig = Object.assign({}, this.dbConfig, msg.obj, { password: '' });
+                                this.loading(true);
+                                await PromiseUtil.sleep(5000);
+                                window.location.reload();
+                            }
+                        },
+                    });
                 },
                 async updateDbFolder() {
                     if (!this.dbFolder) {
@@ -932,6 +1020,7 @@
             },
             async mounted() {
                 await this.getAllSetting();
+                await this.getDbConfig();
                 await this.getDbFolder();
                 while (true) {
                     await PromiseUtil.sleep(1000);
