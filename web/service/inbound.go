@@ -415,7 +415,12 @@ func (s *InboundService) updateClientTraffics(tx *gorm.DB, oldInbound *model.Inb
 				break
 			}
 		}
-		if !emailExists {
+		if emailExists {
+			err = s.UpdateClientStat(tx, newClient.Email, &newClient)
+			if err != nil {
+				return err
+			}
+		} else {
 			err = s.AddClientStat(tx, oldInbound.Id, &newClient)
 			if err != nil {
 				return err
@@ -778,6 +783,12 @@ func (s *InboundService) AddTraffic(inboundTraffics []*xray.Traffic, clientTraff
 		return err, false
 	}
 
+	subAccountService := SubAccountService{}
+	_, err = subAccountService.StartByClientTraffics(tx, clientTraffics)
+	if err != nil {
+		logger.Warning("Error in starting sub accounts:", err)
+	}
+
 	needRestart0, count, err := s.autoRenewClients(tx)
 	if err != nil {
 		logger.Warning("Error in renew clients:", err)
@@ -792,13 +803,20 @@ func (s *InboundService) AddTraffic(inboundTraffics []*xray.Traffic, clientTraff
 		logger.Debugf("%v clients disabled", count)
 	}
 
-	needRestart2, count, err := s.disableInvalidInbounds(tx)
+	needRestart2, count, err := subAccountService.DisableInvalid(tx)
+	if err != nil {
+		logger.Warning("Error in disabling invalid sub accounts:", err)
+	} else if count > 0 {
+		logger.Debugf("%v sub accounts disabled", count)
+	}
+
+	needRestart3, count, err := s.disableInvalidInbounds(tx)
 	if err != nil {
 		logger.Warning("Error in disabling invalid inbounds:", err)
 	} else if count > 0 {
 		logger.Debugf("%v inbounds disabled", count)
 	}
-	return nil, (needRestart0 || needRestart1 || needRestart2)
+	return nil, (needRestart0 || needRestart1 || needRestart2 || needRestart3)
 }
 
 func (s *InboundService) addInboundTraffic(tx *gorm.DB, traffics []*xray.Traffic) error {
@@ -1172,6 +1190,7 @@ func (s *InboundService) MigrationRemoveOrphanedTraffics() {
 func (s *InboundService) AddClientStat(tx *gorm.DB, inboundId int, client *model.Client) error {
 	clientTraffic := xray.ClientTraffic{}
 	clientTraffic.InboundId = inboundId
+	clientTraffic.SubId = client.SubID
 	clientTraffic.Email = client.Email
 	clientTraffic.Total = client.TotalGB
 	clientTraffic.ExpiryTime = client.ExpiryTime
@@ -1190,6 +1209,7 @@ func (s *InboundService) UpdateClientStat(tx *gorm.DB, email string, client *mod
 		Updates(map[string]interface{}{
 			"enable":      client.Enable,
 			"email":       client.Email,
+			"sub_id":      client.SubID,
 			"total":       client.TotalGB,
 			"expiry_time": client.ExpiryTime,
 			"reset":       client.Reset,
@@ -1208,6 +1228,9 @@ func (s *InboundService) ResetClientTraffic(id int, clientEmail string) (bool, e
 	traffic, err := s.GetClientTrafficByEmail(clientEmail)
 	if err != nil {
 		return false, err
+	}
+	if traffic.SubId != "" {
+		return false, common.NewError("grouped subscription clients must be reset from grouped subscriptions")
 	}
 
 	if !traffic.Enable {
@@ -1275,6 +1298,7 @@ func (s *InboundService) ResetAllClientTraffics(id int) error {
 
 	result := db.Model(xray.ClientTraffic{}).
 		Where(whereText, id).
+		Where("sub_id = ?", "").
 		Updates(map[string]interface{}{"enable": true, "up": 0, "down": 0})
 
 	err := result.Error
@@ -1303,7 +1327,7 @@ func (s *InboundService) DelDepletedClients(id int) (err error) {
 		}
 	}()
 
-	whereText := "reset = 0 and inbound_id "
+	whereText := "reset = 0 and sub_id = '' and inbound_id "
 	if id < 0 {
 		whereText += "> ?"
 	} else {
@@ -1558,6 +1582,8 @@ func (s *InboundService) MigrationRequirements() {
 				tx.Model(xray.ClientTraffic{}).Where("email = ?", modelClient.Email).Count(&count)
 				if count == 0 {
 					s.AddClientStat(tx, inbounds[inbound_index].Id, &modelClient)
+				} else if modelClient.SubID != "" {
+					tx.Model(xray.ClientTraffic{}).Where("email = ?", modelClient.Email).Update("sub_id", modelClient.SubID)
 				}
 			}
 		}

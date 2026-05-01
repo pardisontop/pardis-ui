@@ -124,6 +124,9 @@
                                     <a-button type="primary" icon="plus" @click="openAddInbound">
                                         <template v-if="!isMobile">{{ i18n "pages.inbounds.addInbound" }}</template>
                                     </a-button>
+                                    <a-button type="primary" icon="share-alt" @click="openSubAccounts" v-if="subSettings.enable">
+                                        <template v-if="!isMobile">{{ i18n "pages.inbounds.subAccounts" }}</template>
+                                    </a-button>
                                     <a-dropdown :trigger="['click']">
                                         <a-button type="primary" icon="menu">
                                             <template v-if="!isMobile">{{ i18n "pages.inbounds.generalActions" }}</template>
@@ -442,6 +445,78 @@
                         </a-table>
                     </a-card>
                 </transition>
+                <a-modal v-model="subAccountsModal.visible" width="960px" :footer="null"
+                    title='{{ i18n "pages.inbounds.subAccounts" }}' :class="themeSwitcher.currentTheme">
+                    <a-spin :spinning="subAccountsModal.loading">
+                        <a-form layout="vertical">
+                            <a-row :gutter="12">
+                                <a-col :xs="24" :md="8">
+                                    <a-form-item label='{{ i18n "pages.inbounds.subAccountRemark" }}'>
+                                        <a-input v-model.trim="subAccountForm.remark"></a-input>
+                                    </a-form-item>
+                                </a-col>
+                                <a-col :xs="24" :md="8">
+                                    <a-form-item label='{{ i18n "pages.inbounds.subscription" }} ID'>
+                                        <a-input v-model.trim="subAccountForm.subId">
+                                            <template slot="addonAfter">
+                                                <a-icon type="sync" @click="subAccountForm.subId = RandomUtil.randomLowerAndNum(16)"></a-icon>
+                                            </template>
+                                        </a-input>
+                                    </a-form-item>
+                                </a-col>
+                                <a-col :xs="24" :md="4">
+                                    <a-form-item label='{{ i18n "pages.inbounds.totalFlow" }} (GB)'>
+                                        <a-input-number style="width: 100%;" v-model="subAccountForm.totalGB" :min="0"></a-input-number>
+                                    </a-form-item>
+                                </a-col>
+                                <a-col :xs="24" :md="4">
+                                    <a-form-item label='{{ i18n "pages.inbounds.subAccountDuration" }}'>
+                                        <a-input-number style="width: 100%;" v-model="subAccountForm.durationDays" :min="0"></a-input-number>
+                                    </a-form-item>
+                                </a-col>
+                            </a-row>
+                            <a-form-item label='{{ i18n "pages.inbounds.subAccountInbounds" }}'>
+                                <a-select mode="multiple" style="width: 100%;" v-model="subAccountForm.inboundIds"
+                                    :dropdown-class-name="themeSwitcher.currentTheme">
+                                    <a-select-option v-for="dbInbound in subSupportedInbounds" :value="dbInbound.id">
+                                        #[[ dbInbound.id ]] [[ dbInbound.remark ]] ([[ dbInbound.protocol ]] : [[ dbInbound.port ]])
+                                    </a-select-option>
+                                </a-select>
+                            </a-form-item>
+                            <a-space>
+                                <a-switch v-model="subAccountForm.enable"></a-switch>
+                                <a-button type="primary" @click="saveSubAccount">{{ i18n "confirm" }}</a-button>
+                                <a-button @click="resetSubAccountForm">{{ i18n "reset" }}</a-button>
+                            </a-space>
+                        </a-form>
+                        <a-divider></a-divider>
+                        <a-table :columns="subAccountColumns" :data-source="subAccounts" :row-key="row => row.id" :pagination="false" size="small">
+                            <template slot="subAccount" slot-scope="text, row">
+                                <strong>[[ row.remark ]]</strong>
+                                <div style="font-size: 12px; opacity: .75">[[ row.subId ]]</div>
+                                <a-tag v-if="row.enable && !row.depleted" color="green">{{ i18n "enabled" }}</a-tag>
+                                <a-tag v-else color="red">{{ i18n "disabled" }}</a-tag>
+                            </template>
+                            <template slot="subTraffic" slot-scope="text, row">
+                                <span>[[ sizeFormat(row.up + row.down) ]] / [[ row.total > 0 ? sizeFormat(row.total) : '∞' ]]</span>
+                            </template>
+                            <template slot="subExpire" slot-scope="text, row">
+                                <span>[[ formatSubAccountExpire(row) ]]</span>
+                            </template>
+                            <template slot="subInbounds" slot-scope="text, row">
+                                <a-tag v-for="id in row.inboundIds" :key="id">#[[ id ]]</a-tag>
+                            </template>
+                            <template slot="subActions" slot-scope="text, row">
+                                <a-space>
+                                    <a-button size="small" icon="copy" @click="copySubAccount(row)"></a-button>
+                                    <a-button size="small" icon="edit" @click="editSubAccount(row)"></a-button>
+                                    <a-button size="small" icon="reload" @click="resetSubAccount(row)"></a-button>
+                                    <a-button size="small" type="danger" icon="delete" @click="deleteSubAccount(row)"></a-button>
+                                </a-space>
+                            </template>
+                        </a-table>
+                    </a-spin>
+                </a-modal>
             </a-spin>
         </a-layout-content>
     </a-layout>
@@ -594,6 +669,27 @@
             },
         ];
 
+    const subAccountColumns = [{
+        title: '{{ i18n "pages.inbounds.subAccount" }}',
+        scopedSlots: { customRender: 'subAccount' },
+    }, {
+        title: '{{ i18n "pages.inbounds.traffic" }}',
+        align: 'center',
+        scopedSlots: { customRender: 'subTraffic' },
+    }, {
+        title: '{{ i18n "pages.inbounds.expireDate" }}',
+        align: 'center',
+        scopedSlots: { customRender: 'subExpire' },
+    }, {
+        title: '{{ i18n "pages.inbounds.inbounds" }}',
+        align: 'center',
+        scopedSlots: { customRender: 'subInbounds' },
+    }, {
+        title: '{{ i18n "pages.inbounds.operate" }}',
+        align: 'center',
+        scopedSlots: { customRender: 'subActions' },
+    }];
+
     const app = new Vue({
         delimiters: ['[[', ']]'],
         el: '#app',
@@ -620,6 +716,21 @@
                 enable : false,
                 subURI : '',
                 subJsonURI : '',
+            },
+            subAccounts: [],
+            subAccountColumns,
+            subAccountsModal: {
+                visible: false,
+                loading: false,
+            },
+            subAccountForm: {
+                id: 0,
+                remark: '',
+                subId: RandomUtil.randomLowerAndNum(16),
+                totalGB: 0,
+                durationDays: 0,
+                enable: true,
+                inboundIds: [],
             },
             remarkModel: '-ieo',
             tgBotEnable: false,
@@ -670,6 +781,115 @@
                     this.pageSize = pageSize;
                     this.remarkModel = remarkModel;
                 }
+            },
+            async getSubAccounts() {
+                const msg = await HttpUtil.post('/pardis/subAccount/list');
+                if (msg.success) {
+                    this.subAccounts = msg.obj || [];
+                }
+            },
+            async openSubAccounts() {
+                this.subAccountsModal.visible = true;
+                this.subAccountsModal.loading = true;
+                await this.getSubAccounts();
+                this.subAccountsModal.loading = false;
+            },
+            resetSubAccountForm() {
+                this.subAccountForm = {
+                    id: 0,
+                    remark: '',
+                    subId: RandomUtil.randomLowerAndNum(16),
+                    totalGB: 0,
+                    durationDays: 0,
+                    enable: true,
+                    inboundIds: [],
+                };
+            },
+            editSubAccount(row) {
+                this.subAccountForm = {
+                    id: row.id,
+                    remark: row.remark,
+                    subId: row.subId,
+                    totalGB: toFixed(row.total / ONE_GB, 2),
+                    durationDays: toFixed(row.duration / 86400000, 2),
+                    enable: row.enable,
+                    inboundIds: [...row.inboundIds],
+                };
+            },
+            async saveSubAccount() {
+                if (!this.subAccountForm.subId) {
+                    this.$message.warning('{{ i18n "pages.inbounds.subAccountSubIdRequired" }}');
+                    return;
+                }
+                if (this.subAccountForm.inboundIds.length === 0) {
+                    this.$message.warning('{{ i18n "pages.inbounds.subAccountInboundRequired" }}');
+                    return;
+                }
+                const payload = {
+                    id: this.subAccountForm.id,
+                    remark: this.subAccountForm.remark,
+                    subId: this.subAccountForm.subId,
+                    total: Number(toFixed(this.subAccountForm.totalGB * ONE_GB, 0)),
+                    duration: Number(toFixed(this.subAccountForm.durationDays * 86400000, 0)),
+                    enable: this.subAccountForm.enable,
+                    inboundIds: this.subAccountForm.inboundIds,
+                };
+                const url = payload.id > 0 ? `/pardis/subAccount/update/${payload.id}` : '/pardis/subAccount/add';
+                this.subAccountsModal.loading = true;
+                const msg = await HttpUtil.post(url, payload);
+                if (msg.success) {
+                    this.resetSubAccountForm();
+                    await this.getSubAccounts();
+                    await this.getDBInbounds();
+                }
+                this.subAccountsModal.loading = false;
+            },
+            deleteSubAccount(row) {
+                this.$confirm({
+                    title: '{{ i18n "pages.inbounds.deleteSubAccount" }} ' + row.remark,
+                    content: '{{ i18n "pages.inbounds.deleteSubAccountContent" }}',
+                    class: themeSwitcher.currentTheme,
+                    okText: '{{ i18n "delete" }}',
+                    cancelText: '{{ i18n "cancel" }}',
+                    onOk: async () => {
+                        this.subAccountsModal.loading = true;
+                        const msg = await HttpUtil.post(`/pardis/subAccount/del/${row.id}`);
+                        if (msg.success) {
+                            await this.getSubAccounts();
+                            await this.getDBInbounds();
+                        }
+                        this.subAccountsModal.loading = false;
+                    },
+                });
+            },
+            resetSubAccount(row) {
+                this.$confirm({
+                    title: '{{ i18n "pages.inbounds.resetSubAccount" }} ' + row.remark,
+                    content: '{{ i18n "pages.inbounds.resetSubAccountContent" }}',
+                    class: themeSwitcher.currentTheme,
+                    okText: '{{ i18n "reset" }}',
+                    cancelText: '{{ i18n "cancel" }}',
+                    onOk: async () => {
+                        this.subAccountsModal.loading = true;
+                        const msg = await HttpUtil.post(`/pardis/subAccount/reset/${row.id}`);
+                        if (msg.success) {
+                            await this.getSubAccounts();
+                            await this.getDBInbounds();
+                        }
+                        this.subAccountsModal.loading = false;
+                    },
+                });
+            },
+            copySubAccount(row) {
+                const links = [];
+                if (this.subSettings.subURI) links.push(this.subSettings.subURI + row.subId + '?name=' + row.subId);
+                if (this.subSettings.subJsonURI) links.push(this.subSettings.subJsonURI + row.subId + '?name=' + row.subId);
+                txtModal.show('{{ i18n "pages.inbounds.subAccounts" }}', links.join('\r\n'), row.subId);
+            },
+            formatSubAccountExpire(row) {
+                if (row.duration <= 0) return '∞';
+                if (row.startTime <= 0) return '{{ i18n "pages.inbounds.notStarted" }}';
+                return DateUtil.formatMillis(row.expiryTime);
             },
             setInbounds(dbInbounds) {
                 this.inbounds.splice(0);
@@ -1285,6 +1505,9 @@
             },
 			exportAllSubs() {
                 let subLinks = []
+                this.subAccounts.forEach(s => {
+                    if (s.subId && s.subId.length > 0) subLinks.push(this.subSettings.subURI + s.subId + "?name=" + s.subId)
+                });
                 for (const dbInbound of this.dbInbounds) {
                     const clients = this.getInboundClients(dbInbound);
                     if (clients != null){
@@ -1375,6 +1598,7 @@
             this.onResize();
             this.loading();
             this.getDefaultSettings();
+            this.getSubAccounts();
             if (this.isRefreshEnabled) {
                 this.startDataRefreshLoop();
             }
@@ -1405,6 +1629,13 @@
                     depleted: depleted,
                     expiring: expiring,
                 };
+            },
+            subSupportedInbounds() {
+                return this.dbInbounds.filter(dbInbound => {
+                    if (![Protocols.VMESS, Protocols.VLESS, Protocols.TROJAN, Protocols.SHADOWSOCKS].includes(dbInbound.protocol)) return false;
+                    const inbound = dbInbound.toInbound();
+                    return inbound.clients != null;
+                });
             }
         },
     });

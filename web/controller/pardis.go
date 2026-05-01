@@ -8,6 +8,7 @@ type PardisController struct {
 	BaseController
 
 	inboundController     *InboundController
+	subAccountController  *SubAccountController
 	settingController     *SettingController
 	xraySettingController *XraySettingController
 }
@@ -28,6 +29,7 @@ func (a *PardisController) initRouter(g *gin.RouterGroup) {
 	g.GET("/xray", a.xraySettings)
 
 	a.inboundController = NewInboundController(g)
+	a.subAccountController = NewSubAccountController(g)
 	a.settingController = NewSettingController(g)
 	a.xraySettingController = NewXraySettingController(g)
 }

@@ -43,6 +43,13 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, string, error
 	if err != nil {
 		return nil, "", err
 	}
+	subAccountTraffic, hasSubAccount, err := s.getSubAccountTraffic(subId)
+	if err != nil {
+		return nil, "", err
+	}
+	if hasSubAccount && !subAccountTraffic.Enable {
+		return nil, "", nil
+	}
 
 	// Prepare Inbounds
 	for _, inbound := range inbounds {
@@ -70,7 +77,22 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, string, error
 		}
 	}
 
-	// Prepare statistics
+	if hasSubAccount {
+		traffic = *subAccountTraffic
+	} else {
+		traffic = aggregateSubscriptionTraffic(clientTraffics)
+	}
+	header = subscriptionHeader(traffic)
+	return result, header, nil
+}
+
+func (s *SubService) getSubAccountTraffic(subId string) (*xray.ClientTraffic, bool, error) {
+	subAccountService := service.SubAccountService{}
+	return subAccountService.GetSubscriptionTraffic(subId)
+}
+
+func aggregateSubscriptionTraffic(clientTraffics []xray.ClientTraffic) xray.ClientTraffic {
+	var traffic xray.ClientTraffic
 	for index, clientTraffic := range clientTraffics {
 		if index == 0 {
 			traffic.Up = clientTraffic.Up
@@ -92,8 +114,11 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, string, error
 			}
 		}
 	}
-	header = fmt.Sprintf("upload=%d; download=%d; total=%d; expire=%d", traffic.Up, traffic.Down, traffic.Total, traffic.ExpiryTime/1000)
-	return result, header, nil
+	return traffic
+}
+
+func subscriptionHeader(traffic xray.ClientTraffic) string {
+	return fmt.Sprintf("upload=%d; download=%d; total=%d; expire=%d", traffic.Up, traffic.Down, traffic.Total, traffic.ExpiryTime/1000)
 }
 
 func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) {

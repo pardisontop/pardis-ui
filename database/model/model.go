@@ -67,9 +67,22 @@ type Setting struct {
 	Value string `json:"value" form:"value"`
 }
 
+type SubAccount struct {
+	Id         int    `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
+	Remark     string `json:"remark" form:"remark"`
+	SubId      string `json:"subId" form:"subId" gorm:"uniqueIndex"`
+	Total      int64  `json:"total" form:"total"`
+	Duration   int64  `json:"duration" form:"duration"`
+	StartTime  int64  `json:"startTime" form:"startTime"`
+	Enable     bool   `json:"enable" form:"enable"`
+	InboundIds string `json:"inboundIds" form:"inboundIds"`
+}
+
 type Client struct {
 	ID         string `json:"id"`
 	Password   string `json:"password"`
+	Security   string `json:"security,omitempty"`
+	Method     string `json:"method,omitempty"`
 	Flow       string `json:"flow"`
 	Email      string `json:"email"`
 	TotalGB    int64  `json:"totalGB" form:"totalGB"`
