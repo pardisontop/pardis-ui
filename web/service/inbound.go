@@ -1224,12 +1224,20 @@ func (s *InboundService) DelClientStat(tx *gorm.DB, email string) error {
 
 func (s *InboundService) ResetClientTraffic(id int, clientEmail string) (bool, error) {
 	needRestart := false
+	db := database.GetDB()
 
 	traffic, err := s.GetClientTrafficByEmail(clientEmail)
 	if err != nil {
 		return false, err
 	}
-	if traffic.SubId != "" {
+	if traffic == nil {
+		return false, common.NewError("client traffic not found:", clientEmail)
+	}
+	isGroupedSub, err := (&SubAccountService{}).Exists(db, traffic.SubId)
+	if err != nil {
+		return false, err
+	}
+	if isGroupedSub {
 		return false, common.NewError("grouped subscription clients must be reset from grouped subscriptions")
 	}
 
@@ -1277,7 +1285,6 @@ func (s *InboundService) ResetClientTraffic(id int, clientEmail string) (bool, e
 	traffic.Down = 0
 	traffic.Enable = true
 
-	db := database.GetDB()
 	err = db.Save(traffic).Error
 	if err != nil {
 		return false, err
@@ -1288,6 +1295,10 @@ func (s *InboundService) ResetClientTraffic(id int, clientEmail string) (bool, e
 
 func (s *InboundService) ResetAllClientTraffics(id int) error {
 	db := database.GetDB()
+	groupedSubIds, err := (&SubAccountService{}).SubIds(db)
+	if err != nil {
+		return err
+	}
 
 	whereText := "inbound_id "
 	if id == -1 {
@@ -1296,12 +1307,14 @@ func (s *InboundService) ResetAllClientTraffics(id int) error {
 		whereText += " = ?"
 	}
 
-	result := db.Model(xray.ClientTraffic{}).
-		Where(whereText, id).
-		Where("sub_id = ?", "").
-		Updates(map[string]interface{}{"enable": true, "up": 0, "down": 0})
+	query := db.Model(xray.ClientTraffic{}).Where(whereText, id)
+	if len(groupedSubIds) > 0 {
+		query = query.Where("(sub_id = ? OR sub_id NOT IN ?)", "", groupedSubIds)
+	}
 
-	err := result.Error
+	result := query.Updates(map[string]interface{}{"enable": true, "up": 0, "down": 0})
+
+	err = result.Error
 	return err
 }
 
@@ -1327,7 +1340,12 @@ func (s *InboundService) DelDepletedClients(id int) (err error) {
 		}
 	}()
 
-	whereText := "reset = 0 and sub_id = '' and inbound_id "
+	groupedSubIds, err := (&SubAccountService{}).SubIds(db)
+	if err != nil {
+		return err
+	}
+
+	whereText := "reset = 0 and inbound_id "
 	if id < 0 {
 		whereText += "> ?"
 	} else {
@@ -1335,7 +1353,11 @@ func (s *InboundService) DelDepletedClients(id int) (err error) {
 	}
 
 	depletedClients := []xray.ClientTraffic{}
-	err = db.Model(xray.ClientTraffic{}).Where(whereText+" and enable = ?", id, false).Select("inbound_id, GROUP_CONCAT(email) as email").Group("inbound_id").Find(&depletedClients).Error
+	query := db.Model(xray.ClientTraffic{}).Where(whereText+" and enable = ?", id, false)
+	if len(groupedSubIds) > 0 {
+		query = query.Where("(sub_id = ? OR sub_id NOT IN ?)", "", groupedSubIds)
+	}
+	err = query.Select("inbound_id, GROUP_CONCAT(email) as email").Group("inbound_id").Find(&depletedClients).Error
 	if err != nil {
 		return err
 	}

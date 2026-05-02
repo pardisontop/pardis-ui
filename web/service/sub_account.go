@@ -19,6 +19,21 @@ import (
 
 type SubAccountService struct{}
 
+func (s *SubAccountService) SubIds(tx *gorm.DB) ([]string, error) {
+	var subIds []string
+	err := tx.Model(model.SubAccount{}).Select("sub_id").Find(&subIds).Error
+	return subIds, err
+}
+
+func (s *SubAccountService) Exists(tx *gorm.DB, subId string) (bool, error) {
+	if subId == "" {
+		return false, nil
+	}
+	var count int64
+	err := tx.Model(model.SubAccount{}).Where("sub_id = ?", subId).Count(&count).Error
+	return count > 0, err
+}
+
 type SubAccountForm struct {
 	Id         int    `json:"id" form:"id"`
 	Remark     string `json:"remark" form:"remark"`
