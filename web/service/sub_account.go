@@ -1,6 +1,7 @@
 package service
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -115,7 +116,8 @@ func subAccountLimitReached(account *model.SubAccount, up int64, down int64, now
 }
 
 func subAccountClientEmail(subId string, inboundId int) string {
-	return fmt.Sprintf("sub-%s-%d", subId, inboundId)
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%s:%d", subId, inboundId)))
+	return fmt.Sprintf("sub-%s-%x", subId, sum[:5])
 }
 
 func isSubAccountProtocol(protocol model.Protocol) bool {
@@ -384,9 +386,8 @@ func (s *SubAccountService) syncSubAccountClients(tx *gorm.DB, oldSubId string, 
 			}
 			if clientSubId == account.SubId {
 				if shouldHave && !found {
-					clientEmail = getSubAccountClientString(c, "email")
-					if clientEmail == "" {
-						clientEmail = subAccountClientEmail(account.SubId, inbound.Id)
+					clientEmail = subAccountClientEmail(account.SubId, inbound.Id)
+					if getSubAccountClientString(c, "email") != clientEmail {
 						c["email"] = clientEmail
 					}
 					normalizeSubAccountClient(c, account.SubId, clientEnable)
@@ -443,7 +444,10 @@ func (s *SubAccountService) syncSubAccountClients(tx *gorm.DB, oldSubId string, 
 
 func (s *SubAccountService) upsertSubAccountClientTraffic(tx *gorm.DB, inboundId int, subId string, email string, enable bool) error {
 	traffic := &xray.ClientTraffic{}
-	err := tx.Model(xray.ClientTraffic{}).Where("email = ?", email).First(traffic).Error
+	err := tx.Model(xray.ClientTraffic{}).Where("sub_id = ? AND inbound_id = ?", subId, inboundId).First(traffic).Error
+	if database.IsNotFound(err) {
+		err = tx.Model(xray.ClientTraffic{}).Where("email = ?", email).First(traffic).Error
+	}
 	if database.IsNotFound(err) {
 		return tx.Create(&xray.ClientTraffic{
 			InboundId:   inboundId,
@@ -463,6 +467,7 @@ func (s *SubAccountService) upsertSubAccountClientTraffic(tx *gorm.DB, inboundId
 	return tx.Model(xray.ClientTraffic{}).Where("id = ?", traffic.Id).Updates(map[string]interface{}{
 		"inbound_id":  inboundId,
 		"sub_id":      subId,
+		"email":       email,
 		"enable":      enable,
 		"total":       0,
 		"expiry_time": 0,
@@ -669,6 +674,13 @@ func (s *SubAccountService) DisableInvalid(tx *gorm.DB) (bool, int64, error) {
 		if !subAccountLimitReached(account, up, down, now) {
 			continue
 		}
+		var enabledTrafficCount int64
+		if err := tx.Model(xray.ClientTraffic{}).Where("sub_id = ? AND enable = ?", account.SubId, true).Count(&enabledTrafficCount).Error; err != nil {
+			return false, 0, err
+		}
+		if enabledTrafficCount == 0 {
+			continue
+		}
 		disabledIds = append(disabledIds, account.Id)
 		disabledSubIds = append(disabledSubIds, account.SubId)
 		accountRefs, err := s.setSubAccountClientsEnable(tx, account.SubId, false)
@@ -679,9 +691,6 @@ func (s *SubAccountService) DisableInvalid(tx *gorm.DB) (bool, int64, error) {
 	}
 	if len(disabledIds) == 0 {
 		return false, 0, nil
-	}
-	if err := tx.Model(model.SubAccount{}).Where("id IN ?", disabledIds).Update("enable", false).Error; err != nil {
-		return false, 0, err
 	}
 	if err := tx.Model(xray.ClientTraffic{}).Where("sub_id IN ?", disabledSubIds).Update("enable", false).Error; err != nil {
 		return false, 0, err
@@ -736,9 +745,6 @@ func (s *SubAccountService) GetSubscriptionTraffic(subId string) (*xray.ClientTr
 		Down:       down,
 		Total:      account.Total,
 		ExpiryTime: subAccountExpiryTime(account),
-	}
-	if subAccountLimitReached(account, up, down, time.Now().Unix()*1000) {
-		traffic.Enable = false
 	}
 	return traffic, true, nil
 }

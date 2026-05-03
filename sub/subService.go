@@ -69,7 +69,7 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, string, error
 			}
 		}
 		for _, client := range clients {
-			if client.Enable && client.SubID == subId {
+			if client.SubID == subId && (client.Enable || hasSubAccount) {
 				link := s.getLink(inbound, client.Email)
 				result = append(result, link)
 				clientTraffics = append(clientTraffics, s.getClientTraffics(inbound.ClientStats, client.Email))
@@ -123,8 +123,12 @@ func subscriptionHeader(traffic xray.ClientTraffic) string {
 
 func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) {
 	db := database.GetDB()
+	hasSubAccount, err := (&service.SubAccountService{}).Exists(db, subId)
+	if err != nil {
+		return nil, err
+	}
 	var candidates []*model.Inbound
-	err := db.Model(model.Inbound{}).
+	err = db.Model(model.Inbound{}).
 		Preload("ClientStats").
 		Where("protocol IN ?", []string{"vmess", "vless", "trojan", "shadowsocks"}).
 		Find(&candidates).Error
@@ -139,7 +143,7 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 			return nil, err
 		}
 		for _, client := range clients {
-			if client.Enable && client.SubID == subId {
+			if client.SubID == subId && (client.Enable || hasSubAccount) {
 				inbounds = append(inbounds, inbound)
 				break
 			}

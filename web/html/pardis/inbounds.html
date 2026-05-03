@@ -495,6 +495,7 @@
                                 <strong>[[ row.remark ]]</strong>
                                 <div style="font-size: 12px; opacity: .75">[[ row.subId ]]</div>
                                 <a-tag v-if="row.enable && !row.depleted" color="green">{{ i18n "enabled" }}</a-tag>
+                                <a-tag v-else-if="row.depleted" color="red">{{ i18n "depleted" }}</a-tag>
                                 <a-tag v-else color="red">{{ i18n "disabled" }}</a-tag>
                             </template>
                             <template slot="subTraffic" slot-scope="text, row">
@@ -508,6 +509,7 @@
                             </template>
                             <template slot="subActions" slot-scope="text, row">
                                 <a-space>
+                                    <a-button size="small" icon="qrcode" @click="openSubAccountQr(row)"></a-button>
                                     <a-button size="small" icon="copy" @click="copySubAccount(row)"></a-button>
                                     <a-button size="small" icon="edit" @click="editSubAccount(row)"></a-button>
                                     <a-button size="small" icon="reload" @click="resetSubAccount(row)"></a-button>
@@ -516,6 +518,24 @@
                             </template>
                         </a-table>
                     </a-spin>
+                </a-modal>
+                <a-modal v-model="subAccountQr.visible" width="340px" :footer="null" :class="themeSwitcher.currentTheme">
+                    <template slot="title">
+                        <span>{{ i18n "qrCode" }} - [[ subAccountQr.remark ]]</span>
+                    </template>
+                    <a-tag color="green" style="margin-bottom: 10px;display: block;text-align: center;">
+                        {{ i18n "pages.inbounds.clickOnQRcode" }}
+                    </a-tag>
+                    <a-divider>{{ i18n "pages.settings.subSettings" }}</a-divider>
+                    <canvas id="groupSubQr-sub" @click="copyText(subAccountQr.subLink)"
+                        style="width: 100%; height: 100%; display: flex; border-radius: 1rem;"></canvas>
+                    <a-input style="margin-top: 8px;" :value="subAccountQr.subLink" readonly @click="copyText(subAccountQr.subLink)"></a-input>
+                    <template v-if="subAccountQr.subJsonLink">
+                        <a-divider>{{ i18n "pages.settings.subSettings" }} Json</a-divider>
+                        <canvas id="groupSubQr-json" @click="copyText(subAccountQr.subJsonLink)"
+                            style="width: 100%; height: 100%; display: flex; border-radius: 1rem;"></canvas>
+                        <a-input style="margin-top: 8px;" :value="subAccountQr.subJsonLink" readonly @click="copyText(subAccountQr.subJsonLink)"></a-input>
+                    </template>
                 </a-modal>
             </a-spin>
         </a-layout-content>
@@ -732,6 +752,12 @@
                 enable: true,
                 inboundIds: [],
             },
+            subAccountQr: {
+                visible: false,
+                remark: '',
+                subLink: '',
+                subJsonLink: '',
+            },
             remarkModel: '-ieo',
             tgBotEnable: false,
             showAlert: false,
@@ -885,6 +911,40 @@
                 if (this.subSettings.subURI) links.push(this.subSettings.subURI + row.subId + '?name=' + row.subId);
                 if (this.subSettings.subJsonURI) links.push(this.subSettings.subJsonURI + row.subId + '?name=' + row.subId);
                 txtModal.show('{{ i18n "pages.inbounds.subAccounts" }}', links.join('\r\n'), row.subId);
+            },
+            openSubAccountQr(row) {
+                this.subAccountQr = {
+                    visible: true,
+                    remark: row.remark || row.subId,
+                    subLink: this.subSettings.subURI ? this.subSettings.subURI + row.subId + '?name=' + row.subId : '',
+                    subJsonLink: this.subSettings.subJsonURI ? this.subSettings.subJsonURI + row.subId + '?name=' + row.subId : '',
+                };
+                this.$nextTick(() => this.renderSubAccountQr());
+            },
+            renderSubAccountQr() {
+                if (this.subAccountQr.subLink) {
+                    new QRious({
+                        element: document.querySelector('#groupSubQr-sub'),
+                        size: 300,
+                        value: this.subAccountQr.subLink,
+                    });
+                }
+                if (this.subAccountQr.subJsonLink) {
+                    new QRious({
+                        element: document.querySelector('#groupSubQr-json'),
+                        size: 300,
+                        value: this.subAccountQr.subJsonLink,
+                    });
+                }
+            },
+            async copyText(text) {
+                if (!text) return;
+                try {
+                    await navigator.clipboard.writeText(text);
+                    this.$message.success('{{ i18n "copied" }}');
+                } catch (e) {
+                    txtModal.show('{{ i18n "pages.inbounds.copyLink" }}', text);
+                }
             },
             formatSubAccountExpire(row) {
                 if (row.duration <= 0) return '∞';
