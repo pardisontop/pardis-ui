@@ -78,6 +78,40 @@ type SubAccount struct {
 	InboundIds string `json:"inboundIds" form:"inboundIds"`
 }
 
+type ClientConnectionSession struct {
+	Id         int    `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
+	InboundId  int    `json:"inboundId" form:"inboundId" gorm:"index:idx_client_session_lookup"`
+	SubId      string `json:"subId" form:"subId" gorm:"size:191;index"`
+	Email      string `json:"email" form:"email" gorm:"size:191;index:idx_client_session_lookup"`
+	StartTime  int64  `json:"startTime" form:"startTime" gorm:"index"`
+	EndTime    int64  `json:"endTime" form:"endTime"`
+	LastSeenAt int64  `json:"lastSeenAt" form:"lastSeenAt" gorm:"index"`
+	Up         int64  `json:"up" form:"up"`
+	Down       int64  `json:"down" form:"down"`
+	Active     bool   `json:"active" form:"active" gorm:"index"`
+}
+
+type ClientUsageSample struct {
+	Id         int    `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
+	InboundId  int    `json:"inboundId" form:"inboundId" gorm:"index:idx_client_usage_lookup"`
+	SubId      string `json:"subId" form:"subId" gorm:"size:191;index"`
+	Email      string `json:"email" form:"email" gorm:"size:191;index:idx_client_usage_lookup"`
+	RecordedAt int64  `json:"recordedAt" form:"recordedAt" gorm:"index:idx_client_usage_lookup"`
+	Up         int64  `json:"up" form:"up"`
+	Down       int64  `json:"down" form:"down"`
+}
+
+type ClientAppUsage struct {
+	Id         int    `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
+	InboundId  int    `json:"inboundId" form:"inboundId" gorm:"index:idx_client_app_usage_lookup"`
+	SubId      string `json:"subId" form:"subId" gorm:"size:191;index"`
+	Email      string `json:"email" form:"email" gorm:"size:191;index:idx_client_app_usage_lookup"`
+	App        string `json:"app" form:"app" gorm:"size:32;index:idx_client_app_usage_lookup"`
+	RecordedAt int64  `json:"recordedAt" form:"recordedAt" gorm:"index:idx_client_app_usage_lookup"`
+	Up         int64  `json:"up" form:"up"`
+	Down       int64  `json:"down" form:"down"`
+}
+
 type Client struct {
 	ID         string `json:"id"`
 	Password   string `json:"password"`

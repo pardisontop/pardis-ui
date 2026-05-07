@@ -782,6 +782,11 @@ func (s *InboundService) AddTraffic(inboundTraffics []*xray.Traffic, clientTraff
 	if err != nil {
 		return err, false
 	}
+	clientAnalyticsService := ClientAnalyticsService{}
+	err = clientAnalyticsService.RecordTraffic(tx, clientTraffics)
+	if err != nil {
+		logger.Warning("Error in recording client analytics:", err)
+	}
 
 	subAccountService := SubAccountService{}
 	_, err = subAccountService.StartByClientTraffics(tx, clientTraffics)

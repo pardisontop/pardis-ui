@@ -4,7 +4,7 @@
     :closable="true"
     :mask-closable="true"
     :footer="null"
-    width="600px"
+    width="760px"
     :class="themeSwitcher.currentTheme"
     >
     <a-row>
@@ -164,6 +164,68 @@
                 </td>
             </tr>
         </table>
+        <a-divider>Usage Analytics</a-divider>
+        <a-spin :spinning="infoModal.analytics.loading">
+            <template v-if="infoModal.analytics.loaded">
+                <a-row :gutter="8" style="margin-bottom: 10px;">
+                    <a-col :xs="24" :md="8">
+                        <a-statistic title="24h Total" :value="sizeFormat(infoModal.analytics.report.totalUp + infoModal.analytics.report.totalDown)"></a-statistic>
+                    </a-col>
+                    <a-col :xs="24" :md="8">
+                        <a-statistic title="Upload" :value="sizeFormat(infoModal.analytics.report.totalUp)"></a-statistic>
+                    </a-col>
+                    <a-col :xs="24" :md="8">
+                        <a-statistic title="Download" :value="sizeFormat(infoModal.analytics.report.totalDown)"></a-statistic>
+                    </a-col>
+                </a-row>
+                <div v-if="infoModal.analytics.report.samples.length > 0"
+                    class="client-table-odd-row"
+                    style="height: 120px; display: flex; align-items: flex-end; gap: 2px; padding: 10px; border-radius: 1rem; margin-bottom: 10px;">
+                    <div v-for="point in infoModal.analytics.report.samples"
+                        :key="point.recordedAt"
+                        :title="DateUtil.formatMillis(point.recordedAt) + ' - ' + sizeFormat(point.up + point.down)"
+                        :style="usageBarStyle(point)">
+                    </div>
+                </div>
+                <a-empty v-else description="No usage samples yet" style="margin-bottom: 10px;"></a-empty>
+                <a-alert v-if="!infoModal.analytics.report.appTrackingAvailable"
+                    type="info"
+                    show-icon
+                    :message="infoModal.analytics.report.appTrackingNote"
+                    style="margin-bottom: 10px;">
+                </a-alert>
+                <div v-else style="margin-bottom: 10px;">
+                    <a-row v-for="row in infoModal.analytics.report.apps" :key="row.app" :gutter="8" style="margin-bottom: 6px;">
+                        <a-col :xs="8" :md="5">[[ appLabel(row.app) ]]</a-col>
+                        <a-col :xs="16" :md="19">
+                            <a-progress :percent="appUsagePercent(row)" :show-info="false"></a-progress>
+                            <span>[[ sizeFormat(row.up + row.down) ]]</span>
+                        </a-col>
+                    </a-row>
+                </div>
+                <template v-if="recentSessions().length > 0">
+                    <a-divider>Connection Sessions</a-divider>
+                    <a-table size="small"
+                        :columns="analyticsSessionColumns"
+                        :data-source="recentSessions()"
+                        :row-key="row => row.id"
+                        :pagination="false">
+                        <template slot="sessionRange" slot-scope="text, row">
+                            [[ DateUtil.formatMillis(row.startTime) ]]<br />
+                            <span v-if="row.active">Active</span>
+                            <span v-else>[[ DateUtil.formatMillis(row.endTime) ]]</span>
+                        </template>
+                        <template slot="sessionUsage" slot-scope="text, row">
+                            [[ sizeFormat(row.up + row.down) ]]
+                        </template>
+                        <template slot="sessionDuration" slot-scope="text, row">
+                            [[ sessionDuration(row) ]]
+                        </template>
+                    </a-table>
+                </template>
+            </template>
+            <a-empty v-else description="Analytics will appear after this client has traffic"></a-empty>
+        </a-spin>
         <template v-if="app.subSettings.enable && infoModal.clientSettings.subId">
             <a-divider>Subscription URL</a-divider>
             <a-row>
@@ -343,6 +405,36 @@
     </template>
 </a-modal>
 <script>
+    const analyticsSessionColumns = [{
+        title: 'From / To',
+        scopedSlots: { customRender: 'sessionRange' },
+    }, {
+        title: 'Usage',
+        align: 'center',
+        scopedSlots: { customRender: 'sessionUsage' },
+    }, {
+        title: 'Duration',
+        align: 'center',
+        scopedSlots: { customRender: 'sessionDuration' },
+    }];
+
+    function emptyClientAnalytics() {
+        return {
+            loading: false,
+            loaded: false,
+            report: {
+                totalUp: 0,
+                totalDown: 0,
+                sessions: [],
+                samples: [],
+                apps: [],
+                appTrackingAvailable: false,
+                appTrackingNote: '',
+                now: new Date().getTime(),
+            },
+        };
+    }
+
     const infoModal = {
         visible: false,
         inbound: new Inbound(),
@@ -358,6 +450,7 @@
         subLink: '',
         subJsonLink: '',
         tgLink: '',
+        analytics: emptyClientAnalytics(),
         show(dbInbound, index) {
             this.index = index;
             this.inbound = dbInbound.toInbound();
@@ -365,6 +458,7 @@
             this.clientSettings = this.inbound.clients ? this.inbound.clients[index] : null;
             this.isExpired = this.inbound.clients ? this.inbound.isExpiry(index): this.dbInbound.isExpiry;
             this.clientStats = this.inbound.clients ? this.dbInbound.clientStats.find(row => row.email === this.clientSettings.email) : [];
+            this.analytics = emptyClientAnalytics();
             if (this.inbound.protocol == Protocols.WIREGUARD){
                 this.links = this.inbound.genInboundLinks(dbInbound.remark).split('\r\n')
             } else {
@@ -380,6 +474,23 @@
                 }
             }
             this.visible = true;
+            this.loadAnalytics();
+        },
+        async loadAnalytics() {
+            if (!this.clientSettings || !this.clientSettings.email) {
+                this.analytics.loaded = true;
+                return;
+            }
+            this.analytics.loading = true;
+            const msg = await HttpUtil.post('/pardis/clientAnalytics/report', {
+                email: this.clientSettings.email,
+                inboundId: this.dbInbound.id,
+            });
+            this.analytics.loading = false;
+            this.analytics.loaded = true;
+            if (msg.success) {
+                this.analytics.report = msg.obj || emptyClientAnalytics().report;
+            }
         },
         close() {
             infoModal.visible = false;
@@ -397,6 +508,7 @@
         el: '#inbound-info-modal',
         data: {
             infoModal,
+            analyticsSessionColumns,
             get dbInbound() {
                 return this.infoModal.dbInbound;
             },
@@ -432,6 +544,38 @@
             getRemStats() {
                 remained = this.infoModal.clientStats.total - this.infoModal.clientStats.up - this.infoModal.clientStats.down;
                 return remained>0 ? sizeFormat(remained) : '-';
+            },
+            maxUsagePoint() {
+                const samples = this.infoModal.analytics.report.samples || [];
+                return samples.reduce((max, point) => Math.max(max, point.up + point.down), 0);
+            },
+            usageBarStyle(point) {
+                const max = this.maxUsagePoint();
+                const percent = max > 0 ? Math.max(4, Math.round(100 * (point.up + point.down) / max)) : 4;
+                return {
+                    flex: '1 1 0',
+                    minWidth: '2px',
+                    height: percent + '%',
+                    borderRadius: '4px 4px 0 0',
+                    background: themeSwitcher.isDarkTheme ? 'linear-gradient(180deg, #59a5ff, #1b4d89)' : 'linear-gradient(180deg, #7a316f, #d68ac8)',
+                };
+            },
+            recentSessions() {
+                const sessions = this.infoModal.analytics.report.sessions || [];
+                return sessions.slice(-5).reverse();
+            },
+            sessionDuration(row) {
+                const endTime = row.active ? this.infoModal.analytics.report.now : row.endTime;
+                if (!row.startTime || endTime <= row.startTime) return '-';
+                return formatSecond((endTime - row.startTime) / 1000);
+            },
+            appLabel(appName) {
+                return appName === 'x' ? 'X' : appName.charAt(0).toUpperCase() + appName.slice(1);
+            },
+            appUsagePercent(row) {
+                const apps = this.infoModal.analytics.report.apps || [];
+                const max = apps.reduce((current, app) => Math.max(current, app.up + app.down), 0);
+                return max > 0 ? Math.round(100 * (row.up + row.down) / max) : 0;
             },
         },
         

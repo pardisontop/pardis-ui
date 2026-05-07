@@ -63,6 +63,10 @@ func initSubAccount() error {
 	return db.AutoMigrate(&model.SubAccount{})
 }
 
+func initClientAnalytics() error {
+	return db.AutoMigrate(&model.ClientConnectionSession{}, &model.ClientUsageSample{}, &model.ClientAppUsage{})
+}
+
 func initClientTraffic() error {
 	return db.AutoMigrate(&xray.ClientTraffic{})
 }
@@ -192,6 +196,10 @@ func InitDB(dbPath string) error {
 	}
 
 	err = initClientTraffic()
+	if err != nil {
+		return err
+	}
+	err = initClientAnalytics()
 	if err != nil {
 		return err
 	}

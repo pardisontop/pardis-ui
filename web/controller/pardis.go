@@ -7,10 +7,11 @@ import (
 type PardisController struct {
 	BaseController
 
-	inboundController     *InboundController
-	subAccountController  *SubAccountController
-	settingController     *SettingController
-	xraySettingController *XraySettingController
+	inboundController          *InboundController
+	subAccountController       *SubAccountController
+	clientAnalyticsController *ClientAnalyticsController
+	settingController          *SettingController
+	xraySettingController      *XraySettingController
 }
 
 func NewPardisController(g *gin.RouterGroup) *PardisController {
@@ -30,6 +31,7 @@ func (a *PardisController) initRouter(g *gin.RouterGroup) {
 
 	a.inboundController = NewInboundController(g)
 	a.subAccountController = NewSubAccountController(g)
+	a.clientAnalyticsController = NewClientAnalyticsController(g)
 	a.settingController = NewSettingController(g)
 	a.xraySettingController = NewXraySettingController(g)
 }
