@@ -165,11 +165,44 @@
             </tr>
         </table>
         <a-divider>Usage Analytics</a-divider>
+        <a-row :gutter="8" style="margin-bottom: 10px;">
+            <a-col :xs="24" :md="8" style="margin-bottom: 8px;">
+                <a-select v-model="infoModal.analytics.rangePreset" style="width: 100%;" @change="analyticsRangeChanged">
+                    <a-select-option value="1h">Last 1 hour</a-select-option>
+                    <a-select-option value="6h">Last 6 hours</a-select-option>
+                    <a-select-option value="24h">Last 24 hours</a-select-option>
+                    <a-select-option value="7d">Last 7 days</a-select-option>
+                    <a-select-option value="custom">Custom range</a-select-option>
+                </a-select>
+            </a-col>
+            <a-col :xs="24" :md="8" style="margin-bottom: 8px;">
+                <a-select v-model="infoModal.analytics.granularity" style="width: 100%;" @change="analyticsRangeChanged">
+                    <a-select-option value="minute">Minute buckets</a-select-option>
+                    <a-select-option value="hour">Hourly buckets</a-select-option>
+                </a-select>
+            </a-col>
+            <a-col :xs="24" :md="8" style="margin-bottom: 8px;">
+                <a-button style="width: 100%;" @click="infoModal.loadAnalytics()">
+                    <a-icon type="reload"></a-icon>
+                    Refresh
+                </a-button>
+            </a-col>
+        </a-row>
+        <a-row v-if="infoModal.analytics.rangePreset === 'custom'" style="margin-bottom: 10px;">
+            <a-col :span="24">
+                <a-range-picker style="width: 100%;"
+                    :show-time="{ format: 'HH:mm' }"
+                    format="YYYY-MM-DD HH:mm"
+                    v-model="infoModal.analytics.customRange"
+                    @change="analyticsCustomRangeChanged">
+                </a-range-picker>
+            </a-col>
+        </a-row>
         <a-spin :spinning="infoModal.analytics.loading">
             <template v-if="infoModal.analytics.loaded">
                 <a-row :gutter="8" style="margin-bottom: 10px;">
                     <a-col :xs="24" :md="8">
-                        <a-statistic title="24h Total" :value="sizeFormat(infoModal.analytics.report.totalUp + infoModal.analytics.report.totalDown)"></a-statistic>
+                        <a-statistic title="Range Total" :value="sizeFormat(infoModal.analytics.report.totalUp + infoModal.analytics.report.totalDown)"></a-statistic>
                     </a-col>
                     <a-col :xs="24" :md="8">
                         <a-statistic title="Upload" :value="sizeFormat(infoModal.analytics.report.totalUp)"></a-statistic>
@@ -178,13 +211,34 @@
                         <a-statistic title="Download" :value="sizeFormat(infoModal.analytics.report.totalDown)"></a-statistic>
                     </a-col>
                 </a-row>
-                <div v-if="infoModal.analytics.report.samples.length > 0"
-                    class="client-table-odd-row"
-                    style="height: 120px; display: flex; align-items: flex-end; gap: 2px; padding: 10px; border-radius: 1rem; margin-bottom: 10px;">
-                    <div v-for="point in infoModal.analytics.report.samples"
-                        :key="point.recordedAt"
-                        :title="DateUtil.formatMillis(point.recordedAt) + ' - ' + sizeFormat(point.up + point.down)"
-                        :style="usageBarStyle(point)">
+                <div v-if="infoModal.analytics.report.samples.length > 0" style="margin-bottom: 10px;">
+                    <div class="client-table-odd-row" style="height: 190px; padding: 12px; border-radius: 1rem;">
+                        <svg viewBox="0 0 720 160" preserveAspectRatio="none" style="width: 100%; height: 160px; overflow: visible;">
+                            <line x1="0" y1="40" x2="720" y2="40" :stroke="chartGridColor()" stroke-width="1"></line>
+                            <line x1="0" y1="80" x2="720" y2="80" :stroke="chartGridColor()" stroke-width="1"></line>
+                            <line x1="0" y1="120" x2="720" y2="120" :stroke="chartGridColor()" stroke-width="1"></line>
+                            <rect v-for="bar in usageBars()"
+                                :key="'bar-' + bar.recordedAt"
+                                :x="bar.x"
+                                :y="bar.y"
+                                :width="bar.width"
+                                :height="bar.height"
+                                :fill="chartBarColor()">
+                                <title>[[ formatAnalyticsTime(bar.recordedAt) ]] - [[ sizeFormat(bar.value) ]]</title>
+                            </rect>
+                            <polyline :points="usageLinePoints()"
+                                fill="none"
+                                :stroke="chartLineColor()"
+                                stroke-width="3"
+                                stroke-linejoin="round"
+                                stroke-linecap="round">
+                            </polyline>
+                        </svg>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; opacity: 0.75; margin-top: 4px;">
+                        <span>[[ formatAnalyticsTime(infoModal.analytics.report.since) ]]</span>
+                        <span>[[ analyticsBucketLabel() ]]</span>
+                        <span>[[ formatAnalyticsTime(infoModal.analytics.report.until) ]]</span>
                     </div>
                 </div>
                 <a-empty v-else description="No usage samples yet" style="margin-bottom: 10px;"></a-empty>
@@ -422,6 +476,9 @@
         return {
             loading: false,
             loaded: false,
+            rangePreset: '24h',
+            granularity: 'minute',
+            customRange: [],
             report: {
                 totalUp: 0,
                 totalDown: 0,
@@ -430,6 +487,10 @@
                 apps: [],
                 appTrackingAvailable: false,
                 appTrackingNote: '',
+                since: new Date().getTime() - 86400000,
+                until: new Date().getTime(),
+                granularity: 'minute',
+                bucketMillis: 60000,
                 now: new Date().getTime(),
             },
         };
@@ -481,16 +542,38 @@
                 this.analytics.loaded = true;
                 return;
             }
+            const range = this.resolveAnalyticsRange();
             this.analytics.loading = true;
             const msg = await HttpUtil.post('/pardis/clientAnalytics/report', {
                 email: this.clientSettings.email,
                 inboundId: this.dbInbound.id,
+                since: range.since,
+                until: range.until,
+                granularity: this.analytics.granularity,
             });
             this.analytics.loading = false;
             this.analytics.loaded = true;
             if (msg.success) {
                 this.analytics.report = msg.obj || emptyClientAnalytics().report;
             }
+        },
+        resolveAnalyticsRange() {
+            const now = new Date().getTime();
+            const presetMs = {
+                '1h': 3600000,
+                '6h': 21600000,
+                '24h': 86400000,
+                '7d': 604800000,
+            };
+            if (this.analytics.rangePreset === 'custom' && this.analytics.customRange && this.analytics.customRange.length === 2) {
+                const since = this.analytics.customRange[0].valueOf();
+                const until = this.analytics.customRange[1].valueOf();
+                if (since < until) {
+                    return { since, until };
+                }
+            }
+            const duration = presetMs[this.analytics.rangePreset] || presetMs['24h'];
+            return { since: now - duration, until: now };
         },
         close() {
             infoModal.visible = false;
@@ -545,20 +628,81 @@
                 remained = this.infoModal.clientStats.total - this.infoModal.clientStats.up - this.infoModal.clientStats.down;
                 return remained>0 ? sizeFormat(remained) : '-';
             },
+            analyticsRangeChanged() {
+                if (this.infoModal.analytics.rangePreset !== 'custom' ||
+                    (this.infoModal.analytics.customRange && this.infoModal.analytics.customRange.length === 2)) {
+                    this.infoModal.loadAnalytics();
+                }
+            },
+            analyticsCustomRangeChanged() {
+                if (this.infoModal.analytics.customRange && this.infoModal.analytics.customRange.length === 2) {
+                    this.infoModal.loadAnalytics();
+                }
+            },
             maxUsagePoint() {
                 const samples = this.infoModal.analytics.report.samples || [];
                 return samples.reduce((max, point) => Math.max(max, point.up + point.down), 0);
             },
-            usageBarStyle(point) {
+            chartWidth() {
+                return 720;
+            },
+            chartHeight() {
+                return 160;
+            },
+            chartX(point, index, total) {
+                const report = this.infoModal.analytics.report;
+                const since = report.since || 0;
+                const until = report.until || report.now || new Date().getTime();
+                if (until > since) {
+                    return Math.max(0, Math.min(this.chartWidth(), ((point.recordedAt - since) / (until - since)) * this.chartWidth()));
+                }
+                if (total <= 1) return this.chartWidth() / 2;
+                return index * (this.chartWidth() / (total - 1));
+            },
+            chartY(value) {
                 const max = this.maxUsagePoint();
-                const percent = max > 0 ? Math.max(4, Math.round(100 * (point.up + point.down) / max)) : 4;
-                return {
-                    flex: '1 1 0',
-                    minWidth: '2px',
-                    height: percent + '%',
-                    borderRadius: '4px 4px 0 0',
-                    background: themeSwitcher.isDarkTheme ? 'linear-gradient(180deg, #59a5ff, #1b4d89)' : 'linear-gradient(180deg, #7a316f, #d68ac8)',
-                };
+                if (max <= 0) return this.chartHeight();
+                return this.chartHeight() - ((value / max) * this.chartHeight());
+            },
+            usageLinePoints() {
+                const samples = this.infoModal.analytics.report.samples || [];
+                return samples.map((point, index) => {
+                    const value = point.up + point.down;
+                    return this.chartX(point, index, samples.length) + ',' + this.chartY(value);
+                }).join(' ');
+            },
+            usageBars() {
+                const samples = this.infoModal.analytics.report.samples || [];
+                const width = Math.max(1, Math.min(18, this.chartWidth() / Math.max(samples.length, 1) * 0.7));
+                return samples.map((point, index) => {
+                    const value = point.up + point.down;
+                    const height = Math.max(1, this.chartHeight() - this.chartY(value));
+                    const x = this.chartX(point, index, samples.length) - (width / 2);
+                    return {
+                        recordedAt: point.recordedAt,
+                        value,
+                        x: Math.max(0, x),
+                        y: this.chartHeight() - height,
+                        width,
+                        height,
+                    };
+                });
+            },
+            chartGridColor() {
+                return themeSwitcher.isDarkTheme ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)';
+            },
+            chartBarColor() {
+                return themeSwitcher.isDarkTheme ? 'rgba(89,165,255,0.35)' : 'rgba(122,49,111,0.25)';
+            },
+            chartLineColor() {
+                return themeSwitcher.isDarkTheme ? '#59a5ff' : '#7a316f';
+            },
+            formatAnalyticsTime(value) {
+                if (!value) return '-';
+                return moment(value).format('YYYY-MM-DD HH:mm');
+            },
+            analyticsBucketLabel() {
+                return this.infoModal.analytics.report.granularity === 'hour' ? 'Hourly buckets' : 'Minute buckets';
             },
             recentSessions() {
                 const sessions = this.infoModal.analytics.report.sessions || [];

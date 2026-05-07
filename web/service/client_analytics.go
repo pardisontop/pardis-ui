@@ -17,16 +17,17 @@ const (
 	clientSessionIdleTimeout = 2 * time.Minute
 	defaultAnalyticsWindow   = 24 * time.Hour
 	maxAnalyticsSessions     = 50
-	maxAnalyticsPoints       = 160
 )
 
 var trackedAppNames = []string{"telegram", "whatsapp", "instagram", "youtube", "x"}
 
 type ClientAnalyticsRequest struct {
-	Email     string `json:"email" form:"email"`
-	InboundId int    `json:"inboundId" form:"inboundId"`
-	SubId     string `json:"subId" form:"subId"`
-	Since     int64  `json:"since" form:"since"`
+	Email       string `json:"email" form:"email"`
+	InboundId   int    `json:"inboundId" form:"inboundId"`
+	SubId       string `json:"subId" form:"subId"`
+	Since       int64  `json:"since" form:"since"`
+	Until       int64  `json:"until" form:"until"`
+	Granularity string `json:"granularity" form:"granularity"`
 }
 
 type ClientUsagePoint struct {
@@ -46,7 +47,10 @@ type ClientAnalyticsReport struct {
 	InboundId            int                               `json:"inboundId"`
 	SubId                string                            `json:"subId"`
 	Since                int64                             `json:"since"`
+	Until                int64                             `json:"until"`
 	Now                  int64                             `json:"now"`
+	Granularity          string                            `json:"granularity"`
+	BucketMillis         int64                             `json:"bucketMillis"`
 	TotalUp              int64                             `json:"totalUp"`
 	TotalDown            int64                             `json:"totalDown"`
 	Sessions             []model.ClientConnectionSession   `json:"sessions"`
@@ -135,17 +139,18 @@ func (s *ClientAnalyticsService) GetClientReport(req ClientAnalyticsRequest) (*C
 	}
 
 	nowMs := time.Now().UnixMilli()
-	if req.Since <= 0 || req.Since > nowMs {
-		req.Since = nowMs - int64(defaultAnalyticsWindow/time.Millisecond)
-	}
+	req = normalizeClientAnalyticsRequest(req, nowMs)
 
 	db := database.GetDB()
 	report := &ClientAnalyticsReport{
-		Email:     req.Email,
-		InboundId: req.InboundId,
-		SubId:     req.SubId,
-		Since:     req.Since,
-		Now:       nowMs,
+		Email:        req.Email,
+		InboundId:    req.InboundId,
+		SubId:        req.SubId,
+		Since:        req.Since,
+		Until:        req.Until,
+		Now:          nowMs,
+		Granularity:  req.Granularity,
+		BucketMillis: analyticsBucketMillis(req.Granularity),
 	}
 
 	totals, err := s.getUsageTotals(db, req)
@@ -161,7 +166,7 @@ func (s *ClientAnalyticsService) GetClientReport(req ClientAnalyticsRequest) (*C
 	}
 	report.Sessions = sessions
 
-	samples, err := s.getUsagePoints(db, req, nowMs)
+	samples, err := s.getUsagePoints(db, req)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +230,7 @@ func (s *ClientAnalyticsService) addTrafficToSession(tx *gorm.DB, dbTraffic *xra
 func (s *ClientAnalyticsService) getUsageTotals(db *gorm.DB, req ClientAnalyticsRequest) (*ClientUsagePoint, error) {
 	total := &ClientUsagePoint{}
 	err := applyClientAnalyticsFilters(db.Model(&model.ClientUsageSample{}), req).
-		Where("recorded_at >= ?", req.Since).
+		Where("recorded_at >= ? AND recorded_at <= ?", req.Since, req.Until).
 		Select("COALESCE(SUM(up), 0) as up, COALESCE(SUM(down), 0) as down").
 		Scan(total).Error
 	return total, err
@@ -234,7 +239,7 @@ func (s *ClientAnalyticsService) getUsageTotals(db *gorm.DB, req ClientAnalytics
 func (s *ClientAnalyticsService) getSessions(db *gorm.DB, req ClientAnalyticsRequest) ([]model.ClientConnectionSession, error) {
 	sessions := make([]model.ClientConnectionSession, 0)
 	err := applyClientAnalyticsFilters(db.Model(&model.ClientConnectionSession{}), req).
-		Where("(end_time >= ? OR active = ?)", req.Since, true).
+		Where("start_time <= ? AND (end_time >= ? OR active = ?)", req.Until, req.Since, true).
 		Order("start_time DESC").
 		Limit(maxAnalyticsSessions).
 		Find(&sessions).Error
@@ -245,10 +250,10 @@ func (s *ClientAnalyticsService) getSessions(db *gorm.DB, req ClientAnalyticsReq
 	return sessions, nil
 }
 
-func (s *ClientAnalyticsService) getUsagePoints(db *gorm.DB, req ClientAnalyticsRequest, nowMs int64) ([]ClientUsagePoint, error) {
+func (s *ClientAnalyticsService) getUsagePoints(db *gorm.DB, req ClientAnalyticsRequest) ([]ClientUsagePoint, error) {
 	rawSamples := make([]model.ClientUsageSample, 0)
 	err := applyClientAnalyticsFilters(db.Model(&model.ClientUsageSample{}), req).
-		Where("recorded_at >= ?", req.Since).
+		Where("recorded_at >= ? AND recorded_at <= ?", req.Since, req.Until).
 		Order("recorded_at ASC").
 		Find(&rawSamples).Error
 	if err != nil {
@@ -258,22 +263,10 @@ func (s *ClientAnalyticsService) getUsagePoints(db *gorm.DB, req ClientAnalytics
 		return []ClientUsagePoint{}, nil
 	}
 
-	windowMs := nowMs - req.Since
-	if windowMs <= 0 || len(rawSamples) <= maxAnalyticsPoints {
-		points := make([]ClientUsagePoint, 0, len(rawSamples))
-		for _, sample := range rawSamples {
-			points = append(points, ClientUsagePoint{RecordedAt: sample.RecordedAt, Up: sample.Up, Down: sample.Down})
-		}
-		return points, nil
-	}
-
-	bucketMs := windowMs / maxAnalyticsPoints
-	if bucketMs < 1 {
-		bucketMs = 1
-	}
+	bucketMs := analyticsBucketMillis(req.Granularity)
 	pointsByBucket := make(map[int64]*ClientUsagePoint)
 	for _, sample := range rawSamples {
-		bucket := req.Since + ((sample.RecordedAt - req.Since) / bucketMs * bucketMs)
+		bucket := (sample.RecordedAt / bucketMs) * bucketMs
 		point, ok := pointsByBucket[bucket]
 		if !ok {
 			point = &ClientUsagePoint{RecordedAt: bucket}
@@ -296,7 +289,7 @@ func (s *ClientAnalyticsService) getUsagePoints(db *gorm.DB, req ClientAnalytics
 func (s *ClientAnalyticsService) getAppUsage(db *gorm.DB, req ClientAnalyticsRequest) ([]ClientAppUsageSummary, bool, error) {
 	rows := make([]ClientAppUsageSummary, 0)
 	err := applyClientAnalyticsFilters(db.Model(&model.ClientAppUsage{}), req).
-		Where("recorded_at >= ?", req.Since).
+		Where("recorded_at >= ? AND recorded_at <= ?", req.Since, req.Until).
 		Select("app, COALESCE(SUM(up), 0) as up, COALESCE(SUM(down), 0) as down").
 		Group("app").
 		Scan(&rows).Error
@@ -322,6 +315,26 @@ func (s *ClientAnalyticsService) getAppUsage(db *gorm.DB, req ClientAnalyticsReq
 		apps = append(apps, row)
 	}
 	return apps, trackingAvailable, nil
+}
+
+func normalizeClientAnalyticsRequest(req ClientAnalyticsRequest, nowMs int64) ClientAnalyticsRequest {
+	if req.Until <= 0 || req.Until > nowMs {
+		req.Until = nowMs
+	}
+	if req.Since <= 0 || req.Since >= req.Until {
+		req.Since = req.Until - int64(defaultAnalyticsWindow/time.Millisecond)
+	}
+	if req.Granularity != "hour" {
+		req.Granularity = "minute"
+	}
+	return req
+}
+
+func analyticsBucketMillis(granularity string) int64 {
+	if granularity == "hour" {
+		return int64(time.Hour / time.Millisecond)
+	}
+	return int64(time.Minute / time.Millisecond)
 }
 
 func applyClientAnalyticsFilters(db *gorm.DB, req ClientAnalyticsRequest) *gorm.DB {
