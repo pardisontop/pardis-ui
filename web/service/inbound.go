@@ -1200,6 +1200,7 @@ func (s *InboundService) AddClientStat(tx *gorm.DB, inboundId int, client *model
 	clientTraffic.Total = client.TotalGB
 	clientTraffic.ExpiryTime = client.ExpiryTime
 	clientTraffic.Enable = client.Enable
+	clientTraffic.TrackAnalytics = client.TrackAnalytics
 	clientTraffic.Up = 0
 	clientTraffic.Down = 0
 	clientTraffic.Reset = client.Reset
@@ -1212,12 +1213,13 @@ func (s *InboundService) UpdateClientStat(tx *gorm.DB, email string, client *mod
 	result := tx.Model(xray.ClientTraffic{}).
 		Where("email = ?", email).
 		Updates(map[string]interface{}{
-			"enable":      client.Enable,
-			"email":       client.Email,
-			"sub_id":      client.SubID,
-			"total":       client.TotalGB,
-			"expiry_time": client.ExpiryTime,
-			"reset":       client.Reset,
+			"enable":          client.Enable,
+			"email":           client.Email,
+			"sub_id":          client.SubID,
+			"total":           client.TotalGB,
+			"expiry_time":     client.ExpiryTime,
+			"track_analytics": client.TrackAnalytics,
+			"reset":           client.Reset,
 		})
 	err := result.Error
 	return err
@@ -1609,8 +1611,11 @@ func (s *InboundService) MigrationRequirements() {
 				tx.Model(xray.ClientTraffic{}).Where("email = ?", modelClient.Email).Count(&count)
 				if count == 0 {
 					s.AddClientStat(tx, inbounds[inbound_index].Id, &modelClient)
-				} else if modelClient.SubID != "" {
-					tx.Model(xray.ClientTraffic{}).Where("email = ?", modelClient.Email).Update("sub_id", modelClient.SubID)
+				} else {
+					tx.Model(xray.ClientTraffic{}).Where("email = ?", modelClient.Email).Updates(map[string]interface{}{
+						"sub_id":          modelClient.SubID,
+						"track_analytics": modelClient.TrackAnalytics,
+					})
 				}
 			}
 		}

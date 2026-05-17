@@ -28,6 +28,10 @@ func (j *XrayTrafficJob) Run() {
 	if err != nil {
 		logger.Warning("add traffic failed:", err)
 	}
+	clientAnalyticsService := service.ClientAnalyticsService{}
+	if err := clientAnalyticsService.RecordAccessLogDestinations(); err != nil {
+		logger.Warning("record client destinations failed:", err)
+	}
 	if needRestart {
 		j.xrayService.SetToNeedRestart()
 	}

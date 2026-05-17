@@ -33,6 +33,18 @@
                 <a-select-option v-for="key in TLS_FLOW_CONTROL" :value="key">[[ key ]]</a-select-option>
             </a-select>
         </a-form-item>
+        <a-form-item>
+            <template slot="label">
+                <a-tooltip>
+                    <template slot="title">
+                        <span>Store detailed usage samples, sessions, and destination IPs for these accounts.</span>
+                    </template>
+                    Track Analytics
+                    <a-icon type="question-circle"></a-icon>
+                </a-tooltip>
+            </template>
+            <a-switch v-model="clientsBulkModal.trackAnalytics"></a-switch>
+        </a-form-item>
         <a-form-item v-if="app.subSettings.enable">
             <template slot="label">
                 <a-tooltip>
@@ -124,6 +136,7 @@
         subId: "",
         tgId: "",
         flow: "",
+        trackAnalytics: false,
         delayedStart: false,
         reset: 0,
         ok() {
@@ -150,6 +163,7 @@
                 if(clientsBulkModal.inbound.canEnableTlsFlow()){
                     newClient.flow = clientsBulkModal.flow;
                 }
+                newClient.trackAnalytics = clientsBulkModal.trackAnalytics;
                 newClient.reset = clientsBulkModal.reset;
                 clients.push(newClient);
             }
@@ -171,6 +185,7 @@
             this.subId= "";
             this.tgId= "";
             this.flow= "";
+            this.trackAnalytics = false;
             this.dbInbound = new DBInbound(dbInbound);
             this.inbound = dbInbound.toInbound();
             this.delayedStart = false;

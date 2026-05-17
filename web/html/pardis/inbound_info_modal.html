@@ -203,6 +203,12 @@
                 </a-range-picker>
             </a-col>
         </a-row>
+        <a-alert v-if="infoModal.clientSettings && !infoModal.clientSettings.trackAnalytics"
+            type="warning"
+            show-icon
+            message="Track Analytics is disabled for this account; new detailed samples and destinations will not be stored."
+            style="margin-bottom: 10px;">
+        </a-alert>
         <a-spin :spinning="infoModal.analytics.loading">
             <template v-if="infoModal.analytics.loaded">
                 <a-row :gutter="8" style="margin-bottom: 10px;">
@@ -262,6 +268,28 @@
                         </a-col>
                     </a-row>
                 </div>
+                <template v-if="recentDestinations().length > 0">
+                    <a-divider>Session Destinations</a-divider>
+                    <a-table size="small"
+                        :columns="analyticsDestinationColumns"
+                        :data-source="recentDestinations()"
+                        :row-key="row => row.id"
+                        :pagination="false">
+                        <template slot="destination" slot-scope="text, row">
+                            [[ row.network ]]://[[ row.address ]]<template v-if="row.port">:[[ row.port ]]</template>
+                        </template>
+                        <template slot="destinationSeen" slot-scope="text, row">
+                            [[ DateUtil.formatMillis(row.firstSeenAt) ]]<br />
+                            [[ DateUtil.formatMillis(row.lastSeenAt) ]]
+                        </template>
+                    </a-table>
+                </template>
+                <a-alert v-else
+                    type="info"
+                    show-icon
+                    message="Destination capture needs Xray access log enabled."
+                    style="margin-bottom: 10px;">
+                </a-alert>
                 <template v-if="recentSessions().length > 0">
                     <a-divider>Connection Sessions</a-divider>
                     <a-table size="small"
@@ -477,6 +505,18 @@
         scopedSlots: { customRender: 'sessionDuration' },
     }];
 
+    const analyticsDestinationColumns = [{
+        title: 'Destination',
+        scopedSlots: { customRender: 'destination' },
+    }, {
+        title: 'Connections',
+        dataIndex: 'count',
+        align: 'center',
+    }, {
+        title: 'First / Last Seen',
+        scopedSlots: { customRender: 'destinationSeen' },
+    }];
+
     function emptyClientAnalytics() {
         return {
             loading: false,
@@ -490,6 +530,7 @@
                 totalDown: 0,
                 sessions: [],
                 samples: [],
+                destinations: [],
                 apps: [],
                 appTrackingAvailable: false,
                 appTrackingNote: '',
@@ -629,6 +670,7 @@
         data: {
             infoModal,
             analyticsSessionColumns,
+            analyticsDestinationColumns,
             get dbInbound() {
                 return this.infoModal.dbInbound;
             },
@@ -744,6 +786,10 @@
             recentSessions() {
                 const sessions = this.infoModal.analytics.report.sessions || [];
                 return sessions.slice(-5).reverse();
+            },
+            recentDestinations() {
+                const destinations = this.infoModal.analytics.report.destinations || [];
+                return destinations.slice(0, 20);
             },
             sessionDuration(row) {
                 const endTime = row.active ? this.infoModal.analytics.report.now : row.endTime;

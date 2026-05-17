@@ -450,28 +450,30 @@ func (s *SubAccountService) upsertSubAccountClientTraffic(tx *gorm.DB, inboundId
 	}
 	if database.IsNotFound(err) {
 		return tx.Create(&xray.ClientTraffic{
-			InboundId:   inboundId,
-			SubId:       subId,
-			Enable:      enable,
-			Email:       email,
-			Up:          0,
-			Down:        0,
-			Total:       0,
-			ExpiryTime:  0,
-			Reset:       0,
+			InboundId:       inboundId,
+			SubId:           subId,
+			Enable:          enable,
+			TrackAnalytics:  false,
+			Email:           email,
+			Up:              0,
+			Down:            0,
+			Total:           0,
+			ExpiryTime:      0,
+			Reset:           0,
 		}).Error
 	}
 	if err != nil {
 		return err
 	}
 	return tx.Model(xray.ClientTraffic{}).Where("id = ?", traffic.Id).Updates(map[string]interface{}{
-		"inbound_id":  inboundId,
-		"sub_id":      subId,
-		"email":       email,
-		"enable":      enable,
-		"total":       0,
-		"expiry_time": 0,
-		"reset":       0,
+		"inbound_id":      inboundId,
+		"sub_id":          subId,
+		"email":           email,
+		"enable":          enable,
+		"track_analytics": false,
+		"total":           0,
+		"expiry_time":     0,
+		"reset":           0,
 	}).Error
 }
 

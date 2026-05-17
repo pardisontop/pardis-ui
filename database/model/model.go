@@ -112,6 +112,21 @@ type ClientAppUsage struct {
 	Down       int64  `json:"down" form:"down"`
 }
 
+type ClientSessionDestination struct {
+	Id          int    `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
+	SessionId   int    `json:"sessionId" form:"sessionId" gorm:"index:idx_client_destination_lookup"`
+	InboundId   int    `json:"inboundId" form:"inboundId" gorm:"index"`
+	SubId       string `json:"subId" form:"subId" gorm:"size:191;index"`
+	Email       string `json:"email" form:"email" gorm:"size:191;index:idx_client_destination_lookup"`
+	Network     string `json:"network" form:"network" gorm:"size:16"`
+	Address     string `json:"address" form:"address" gorm:"size:191;index:idx_client_destination_lookup"`
+	Port        int    `json:"port" form:"port"`
+	Destination string `json:"destination" form:"destination" gorm:"size:255"`
+	FirstSeenAt int64  `json:"firstSeenAt" form:"firstSeenAt" gorm:"index"`
+	LastSeenAt  int64  `json:"lastSeenAt" form:"lastSeenAt" gorm:"index"`
+	Count       int    `json:"count" form:"count"`
+}
+
 type Client struct {
 	ID         string `json:"id"`
 	Password   string `json:"password"`
@@ -122,9 +137,10 @@ type Client struct {
 	TotalGB    int64  `json:"totalGB" form:"totalGB"`
 	ExpiryTime int64  `json:"expiryTime" form:"expiryTime"`
 	Enable     bool   `json:"enable" form:"enable"`
-	TgID       string `json:"tgId" form:"tgId"`
-	SubID      string `json:"subId" form:"subId"`
-	Reset      int    `json:"reset" form:"reset"`
+	TgID           string `json:"tgId" form:"tgId"`
+	SubID          string `json:"subId" form:"subId"`
+	TrackAnalytics bool   `json:"trackAnalytics" form:"trackAnalytics"`
+	Reset          int    `json:"reset" form:"reset"`
 }
 
 type VLESSSettings struct {

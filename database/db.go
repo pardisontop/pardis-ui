@@ -64,7 +64,7 @@ func initSubAccount() error {
 }
 
 func initClientAnalytics() error {
-	return db.AutoMigrate(&model.ClientConnectionSession{}, &model.ClientUsageSample{}, &model.ClientAppUsage{})
+	return db.AutoMigrate(&model.ClientConnectionSession{}, &model.ClientUsageSample{}, &model.ClientAppUsage{}, &model.ClientSessionDestination{})
 }
 
 func initClientTraffic() error {

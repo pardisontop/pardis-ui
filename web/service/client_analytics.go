@@ -1,15 +1,24 @@
 package service
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
+	"os"
+	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/pardisontop/pardis-ui/config"
 	"github.com/pardisontop/pardis-ui/database"
 	"github.com/pardisontop/pardis-ui/database/model"
 	"github.com/pardisontop/pardis-ui/util/common"
@@ -25,6 +34,23 @@ const (
 )
 
 var trackedAppNames = []string{"telegram", "whatsapp", "instagram", "youtube", "x"}
+
+var (
+	accessLogOffsetMu    sync.Mutex
+	accessLogOffsets     = map[string]int64{}
+	accessLogTimeRegex   = regexp.MustCompile(`^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})(?:\.\d+)?\s+(.+)$`)
+	accessLogDestRegex   = regexp.MustCompile(`\baccepted\s+((tcp|udp):\S+)`)
+	accessLogEmailRegex  = regexp.MustCompile(`\b(?:email|user)[:=]\s*([^\s\]]+)`)
+)
+
+type clientDestinationEvent struct {
+	Email       string
+	Network     string
+	Address     string
+	Port        int
+	Destination string
+	SeenAt      int64
+}
 
 type ClientAnalyticsRequest struct {
 	Email       string `json:"email" form:"email"`
@@ -60,6 +86,7 @@ type ClientAnalyticsReport struct {
 	TotalDown            int64                             `json:"totalDown"`
 	Sessions             []model.ClientConnectionSession   `json:"sessions"`
 	Samples              []ClientUsagePoint                `json:"samples"`
+	Destinations         []model.ClientSessionDestination  `json:"destinations"`
 	Apps                 []ClientAppUsageSummary           `json:"apps"`
 	AppTrackingAvailable bool                              `json:"appTrackingAvailable"`
 	AppTrackingNote      string                            `json:"appTrackingNote"`
@@ -102,7 +129,7 @@ func (s *ClientAnalyticsService) RecordTraffic(tx *gorm.DB, traffics []*xray.Cli
 		}
 
 		batchClientTraffics := make([]*xray.ClientTraffic, 0, end-i)
-		if err := tx.Model(xray.ClientTraffic{}).Where("email IN ?", emails[i:end]).Find(&batchClientTraffics).Error; err != nil {
+		if err := tx.Model(xray.ClientTraffic{}).Where("email IN ? AND track_analytics = ?", emails[i:end], true).Find(&batchClientTraffics).Error; err != nil {
 			return err
 		}
 		dbClientTraffics = append(dbClientTraffics, batchClientTraffics...)
@@ -136,6 +163,79 @@ func (s *ClientAnalyticsService) RecordTraffic(tx *gorm.DB, traffics []*xray.Cli
 		return nil
 	}
 	return tx.Create(&samples).Error
+}
+
+func (s *ClientAnalyticsService) RecordAccessLogDestinations() error {
+	accessLogPath, err := s.getAccessLogPath()
+	if err != nil || accessLogPath == "" {
+		return err
+	}
+
+	info, err := os.Stat(accessLogPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	accessLogOffsetMu.Lock()
+	defer accessLogOffsetMu.Unlock()
+
+	offset, ok := accessLogOffsets[accessLogPath]
+	if !ok {
+		accessLogOffsets[accessLogPath] = info.Size()
+		return nil
+	}
+	if offset > info.Size() {
+		offset = 0
+	}
+	if offset == info.Size() {
+		return nil
+	}
+
+	file, err := os.Open(accessLogPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	if _, err := file.Seek(offset, io.SeekStart); err != nil {
+		return err
+	}
+
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	events := make([]clientDestinationEvent, 0)
+	for scanner.Scan() {
+		event, ok := parseAccessLogDestination(scanner.Text())
+		if ok {
+			events = append(events, event)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	newOffset, err := file.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return err
+	}
+
+	db := database.GetDB()
+	trackedEmails, err := getTrackedAnalyticsEmails(db, events)
+	if err != nil {
+		return err
+	}
+	for _, event := range events {
+		if !trackedEmails[event.Email] {
+			continue
+		}
+		if err := s.recordDestinationEvent(db, event); err != nil {
+			return err
+		}
+	}
+	accessLogOffsets[accessLogPath] = newOffset
+	return nil
 }
 
 func (s *ClientAnalyticsService) GetClientReport(req ClientAnalyticsRequest) (*ClientAnalyticsReport, error) {
@@ -177,6 +277,12 @@ func (s *ClientAnalyticsService) GetClientReport(req ClientAnalyticsRequest) (*C
 	}
 	report.Samples = samples
 
+	destinations, err := s.getDestinations(db, req, 200)
+	if err != nil {
+		return nil, err
+	}
+	report.Destinations = destinations
+
 	apps, appTrackingAvailable, err := s.getAppUsage(db, req)
 	if err != nil {
 		return nil, err
@@ -212,6 +318,10 @@ func (s *ClientAnalyticsService) ExportClientReportCSV(req ClientAnalyticsReques
 		return "", nil, err
 	}
 	sessions, err := s.getAllSessions(db, req)
+	if err != nil {
+		return "", nil, err
+	}
+	destinations, err := s.getDestinations(db, req, 0)
 	if err != nil {
 		return "", nil, err
 	}
@@ -281,6 +391,22 @@ func (s *ClientAnalyticsService) ExportClientReportCSV(req ClientAnalyticsReques
 	}
 	writeCSVRow(writer)
 
+	writeCSVRow(writer, "session_destinations")
+	writeCSVRow(writer, "session_id", "first_seen", "last_seen", "network", "address", "port", "destination", "connection_count")
+	for _, destination := range destinations {
+		writeCSVRow(writer,
+			strconv.Itoa(destination.SessionId),
+			formatAnalyticsCSVTime(destination.FirstSeenAt),
+			formatAnalyticsCSVTime(destination.LastSeenAt),
+			destination.Network,
+			destination.Address,
+			strconv.Itoa(destination.Port),
+			destination.Destination,
+			strconv.Itoa(destination.Count),
+		)
+	}
+	writeCSVRow(writer)
+
 	writeCSVRow(writer, "app_usage")
 	writeCSVRow(writer, "app", "upload_bytes", "download_bytes", "total_bytes")
 	for _, app := range apps {
@@ -339,6 +465,56 @@ func (s *ClientAnalyticsService) addTrafficToSession(tx *gorm.DB, dbTraffic *xra
 		"last_seen_at": nowMs,
 		"up":           gorm.Expr("up + ?", up),
 		"down":         gorm.Expr("down + ?", down),
+	}).Error
+}
+
+func (s *ClientAnalyticsService) recordDestinationEvent(db *gorm.DB, event clientDestinationEvent) error {
+	var session model.ClientConnectionSession
+	maxClockSkewMs := int64(clientSessionIdleTimeout / time.Millisecond)
+	err := db.Model(&model.ClientConnectionSession{}).
+		Where("email = ? AND start_time <= ? AND (active = ? OR end_time >= ?)", event.Email, event.SeenAt+maxClockSkewMs, true, event.SeenAt).
+		Order("start_time DESC").
+		First(&session).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		err = db.Model(&model.ClientConnectionSession{}).
+			Where("email = ? AND start_time <= ? AND last_seen_at >= ?", event.Email, event.SeenAt+maxClockSkewMs, event.SeenAt-maxClockSkewMs).
+			Order("last_seen_at DESC").
+			First(&session).Error
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	var destination model.ClientSessionDestination
+	err = db.Model(&model.ClientSessionDestination{}).
+		Where("session_id = ? AND address = ? AND port = ? AND network = ?", session.Id, event.Address, event.Port, event.Network).
+		First(&destination).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		destination = model.ClientSessionDestination{
+			SessionId:   session.Id,
+			InboundId:   session.InboundId,
+			SubId:       session.SubId,
+			Email:       session.Email,
+			Network:     event.Network,
+			Address:     event.Address,
+			Port:        event.Port,
+			Destination: event.Destination,
+			FirstSeenAt: event.SeenAt,
+			LastSeenAt:  event.SeenAt,
+			Count:       1,
+		}
+		return db.Create(&destination).Error
+	}
+	if err != nil {
+		return err
+	}
+
+	return db.Model(&destination).Updates(map[string]interface{}{
+		"last_seen_at": event.SeenAt,
+		"count":        gorm.Expr("count + ?", 1),
 	}).Error
 }
 
@@ -419,6 +595,18 @@ func (s *ClientAnalyticsService) getRawUsageSamples(db *gorm.DB, req ClientAnaly
 	return samples, err
 }
 
+func (s *ClientAnalyticsService) getDestinations(db *gorm.DB, req ClientAnalyticsRequest, limit int) ([]model.ClientSessionDestination, error) {
+	destinations := make([]model.ClientSessionDestination, 0)
+	query := applyClientAnalyticsFilters(db.Model(&model.ClientSessionDestination{}), req).
+		Where("first_seen_at <= ? AND last_seen_at >= ?", req.Until, req.Since).
+		Order("last_seen_at DESC")
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	err := query.Find(&destinations).Error
+	return destinations, err
+}
+
 func (s *ClientAnalyticsService) getAppUsage(db *gorm.DB, req ClientAnalyticsRequest) ([]ClientAppUsageSummary, bool, error) {
 	rows := make([]ClientAppUsageSummary, 0)
 	err := applyClientAnalyticsFilters(db.Model(&model.ClientAppUsage{}), req).
@@ -468,6 +656,148 @@ func analyticsBucketMillis(granularity string) int64 {
 		return int64(time.Hour / time.Millisecond)
 	}
 	return int64(time.Minute / time.Millisecond)
+}
+
+func getTrackedAnalyticsEmails(db *gorm.DB, events []clientDestinationEvent) (map[string]bool, error) {
+	result := map[string]bool{}
+	if len(events) == 0 {
+		return result, nil
+	}
+	emailSet := map[string]bool{}
+	emails := make([]string, 0)
+	for _, event := range events {
+		if event.Email == "" || emailSet[event.Email] {
+			continue
+		}
+		emailSet[event.Email] = true
+		emails = append(emails, event.Email)
+	}
+	if len(emails) == 0 {
+		return result, nil
+	}
+
+	tracked := make([]string, 0)
+	if err := db.Model(&xray.ClientTraffic{}).Where("email IN ? AND track_analytics = ?", emails, true).Pluck("email", &tracked).Error; err != nil {
+		return nil, err
+	}
+	for _, email := range tracked {
+		result[email] = true
+	}
+	return result, nil
+}
+
+func (s *ClientAnalyticsService) getAccessLogPath() (string, error) {
+	accessPath := ""
+	if p != nil && p.GetConfig() != nil && len(p.GetConfig().LogConfig) > 0 {
+		accessPath = parseXrayLogAccessPath(p.GetConfig().LogConfig)
+	}
+	if accessPath == "" {
+		templateConfig, err := (SettingService{}).GetXrayConfigTemplate()
+		if err != nil {
+			return "", err
+		}
+		accessPath = parseXrayTemplateAccessPath([]byte(templateConfig))
+	}
+	if accessPath == "" || strings.EqualFold(accessPath, "none") {
+		return "", nil
+	}
+	return resolveAccessLogPath(accessPath), nil
+}
+
+func parseXrayLogAccessPath(data []byte) string {
+	logConfig := struct {
+		Access string `json:"access"`
+	}{}
+	if err := json.Unmarshal(data, &logConfig); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(logConfig.Access)
+}
+
+func parseXrayTemplateAccessPath(data []byte) string {
+	templateConfig := struct {
+		Log json.RawMessage `json:"log"`
+	}{}
+	if err := json.Unmarshal(data, &templateConfig); err != nil || len(templateConfig.Log) == 0 {
+		return ""
+	}
+	return parseXrayLogAccessPath(templateConfig.Log)
+}
+
+func resolveAccessLogPath(accessPath string) string {
+	accessPath = filepath.Clean(accessPath)
+	if filepath.IsAbs(accessPath) {
+		return accessPath
+	}
+	if _, err := os.Stat(accessPath); err == nil {
+		return accessPath
+	}
+	binAccessPath := filepath.Join(config.GetBinFolderPath(), accessPath)
+	if _, err := os.Stat(binAccessPath); err == nil {
+		return binAccessPath
+	}
+	return accessPath
+}
+
+func parseAccessLogDestination(line string) (clientDestinationEvent, bool) {
+	matches := accessLogTimeRegex.FindStringSubmatch(strings.TrimSpace(line))
+	if len(matches) < 3 {
+		return clientDestinationEvent{}, false
+	}
+
+	seenAt, err := time.ParseInLocation("2006/01/02 15:04:05", matches[1], time.Local)
+	if err != nil {
+		return clientDestinationEvent{}, false
+	}
+	body := matches[2]
+	emailMatch := accessLogEmailRegex.FindStringSubmatch(body)
+	if len(emailMatch) < 2 {
+		return clientDestinationEvent{}, false
+	}
+	destMatch := accessLogDestRegex.FindStringSubmatch(body)
+	if len(destMatch) < 3 {
+		return clientDestinationEvent{}, false
+	}
+
+	network, address, port, ok := parseAccessDestinationToken(strings.TrimRight(destMatch[1], ","))
+	if !ok || address == "" {
+		return clientDestinationEvent{}, false
+	}
+	return clientDestinationEvent{
+		Email:       strings.TrimRight(emailMatch[1], ","),
+		Network:     network,
+		Address:     address,
+		Port:        port,
+		Destination: formatAccessDestination(network, address, port),
+		SeenAt:      seenAt.UnixMilli(),
+	}, true
+}
+
+func parseAccessDestinationToken(token string) (string, string, int, bool) {
+	parts := strings.SplitN(token, ":", 2)
+	if len(parts) != 2 {
+		return "", "", 0, false
+	}
+	network := strings.ToLower(parts[0])
+	target := parts[1]
+	host, portText, err := net.SplitHostPort(target)
+	if err != nil {
+		lastColon := strings.LastIndex(target, ":")
+		if lastColon < 0 {
+			return network, strings.Trim(target, "[]"), 0, true
+		}
+		host = target[:lastColon]
+		portText = target[lastColon+1:]
+	}
+	port, _ := strconv.Atoi(portText)
+	return network, strings.Trim(host, "[]"), port, true
+}
+
+func formatAccessDestination(network string, address string, port int) string {
+	if port <= 0 {
+		return network + ":" + address
+	}
+	return fmt.Sprintf("%s:%s:%d", network, address, port)
 }
 
 func writeCSVRow(writer *csv.Writer, row ...string) {
