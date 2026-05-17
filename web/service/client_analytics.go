@@ -692,7 +692,7 @@ func (s *ClientAnalyticsService) getAccessLogPath() (string, error) {
 		accessPath = parseXrayLogAccessPath(p.GetConfig().LogConfig)
 	}
 	if accessPath == "" {
-		templateConfig, err := (SettingService{}).GetXrayConfigTemplate()
+		templateConfig, err := (&SettingService{}).GetXrayConfigTemplate()
 		if err != nil {
 			return "", err
 		}

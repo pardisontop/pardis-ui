@@ -1,0 +1,13 @@
+.git
+.github
+build
+bin
+dev
+db
+cert
+*.log
+*.db
+*.db-*
+docker-compose*.yml
+Dockerfile
+README.md
