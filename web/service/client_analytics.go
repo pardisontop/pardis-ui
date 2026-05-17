@@ -1,8 +1,13 @@
 package service
 
 import (
+	"bytes"
+	"encoding/csv"
 	"errors"
+	"fmt"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pardisontop/pardis-ui/database"
@@ -185,6 +190,116 @@ func (s *ClientAnalyticsService) GetClientReport(req ClientAnalyticsRequest) (*C
 	return report, nil
 }
 
+func (s *ClientAnalyticsService) ExportClientReportCSV(req ClientAnalyticsRequest) (string, []byte, error) {
+	if req.Email == "" && req.SubId == "" {
+		return "", nil, common.NewError("client email or sub id is required")
+	}
+
+	nowMs := time.Now().UnixMilli()
+	req = normalizeClientAnalyticsRequest(req, nowMs)
+	db := database.GetDB()
+
+	totals, err := s.getUsageTotals(db, req)
+	if err != nil {
+		return "", nil, err
+	}
+	bucketedSamples, err := s.getUsagePoints(db, req)
+	if err != nil {
+		return "", nil, err
+	}
+	rawSamples, err := s.getRawUsageSamples(db, req)
+	if err != nil {
+		return "", nil, err
+	}
+	sessions, err := s.getAllSessions(db, req)
+	if err != nil {
+		return "", nil, err
+	}
+	apps, _, err := s.getAppUsage(db, req)
+	if err != nil {
+		return "", nil, err
+	}
+
+	buffer := &bytes.Buffer{}
+	writer := csv.NewWriter(buffer)
+	writeCSVRow(writer, "summary")
+	writeCSVRow(writer, "email", req.Email)
+	writeCSVRow(writer, "sub_id", req.SubId)
+	writeCSVRow(writer, "inbound_id", strconv.Itoa(req.InboundId))
+	writeCSVRow(writer, "from", formatAnalyticsCSVTime(req.Since))
+	writeCSVRow(writer, "to", formatAnalyticsCSVTime(req.Until))
+	writeCSVRow(writer, "granularity", req.Granularity)
+	writeCSVRow(writer, "total_upload_bytes", strconv.FormatInt(totals.Up, 10))
+	writeCSVRow(writer, "total_download_bytes", strconv.FormatInt(totals.Down, 10))
+	writeCSVRow(writer, "total_bytes", strconv.FormatInt(totals.Up+totals.Down, 10))
+	writeCSVRow(writer)
+
+	writeCSVRow(writer, "bucketed_usage")
+	writeCSVRow(writer, "time", "upload_bytes", "download_bytes", "total_bytes")
+	for _, sample := range bucketedSamples {
+		writeCSVRow(writer,
+			formatAnalyticsCSVTime(sample.RecordedAt),
+			strconv.FormatInt(sample.Up, 10),
+			strconv.FormatInt(sample.Down, 10),
+			strconv.FormatInt(sample.Up+sample.Down, 10),
+		)
+	}
+	writeCSVRow(writer)
+
+	writeCSVRow(writer, "raw_usage_samples")
+	writeCSVRow(writer, "time", "upload_bytes", "download_bytes", "total_bytes")
+	for _, sample := range rawSamples {
+		writeCSVRow(writer,
+			formatAnalyticsCSVTime(sample.RecordedAt),
+			strconv.FormatInt(sample.Up, 10),
+			strconv.FormatInt(sample.Down, 10),
+			strconv.FormatInt(sample.Up+sample.Down, 10),
+		)
+	}
+	writeCSVRow(writer)
+
+	writeCSVRow(writer, "connection_sessions")
+	writeCSVRow(writer, "from", "to", "duration_seconds", "active", "upload_bytes", "download_bytes", "total_bytes")
+	for _, session := range sessions {
+		endTime := session.EndTime
+		if session.Active {
+			endTime = req.Until
+		}
+		duration := int64(0)
+		if endTime > session.StartTime {
+			duration = (endTime - session.StartTime) / 1000
+		}
+		writeCSVRow(writer,
+			formatAnalyticsCSVTime(session.StartTime),
+			formatAnalyticsCSVTime(endTime),
+			strconv.FormatInt(duration, 10),
+			strconv.FormatBool(session.Active),
+			strconv.FormatInt(session.Up, 10),
+			strconv.FormatInt(session.Down, 10),
+			strconv.FormatInt(session.Up+session.Down, 10),
+		)
+	}
+	writeCSVRow(writer)
+
+	writeCSVRow(writer, "app_usage")
+	writeCSVRow(writer, "app", "upload_bytes", "download_bytes", "total_bytes")
+	for _, app := range apps {
+		writeCSVRow(writer,
+			app.App,
+			strconv.FormatInt(app.Up, 10),
+			strconv.FormatInt(app.Down, 10),
+			strconv.FormatInt(app.Up+app.Down, 10),
+		)
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		return "", nil, err
+	}
+
+	filename := fmt.Sprintf("client-analytics-%s-%s-%s.csv", sanitizeAnalyticsFilename(req.Email), time.UnixMilli(req.Since).Format("20060102-1504"), time.UnixMilli(req.Until).Format("20060102-1504"))
+	return filename, buffer.Bytes(), nil
+}
+
 func (s *ClientAnalyticsService) closeIdleSessions(tx *gorm.DB, cutoffMs int64) error {
 	return tx.Model(&model.ClientConnectionSession{}).
 		Where("active = ? AND last_seen_at < ?", true, cutoffMs).
@@ -250,6 +365,15 @@ func (s *ClientAnalyticsService) getSessions(db *gorm.DB, req ClientAnalyticsReq
 	return sessions, nil
 }
 
+func (s *ClientAnalyticsService) getAllSessions(db *gorm.DB, req ClientAnalyticsRequest) ([]model.ClientConnectionSession, error) {
+	sessions := make([]model.ClientConnectionSession, 0)
+	err := applyClientAnalyticsFilters(db.Model(&model.ClientConnectionSession{}), req).
+		Where("start_time <= ? AND (end_time >= ? OR active = ?)", req.Until, req.Since, true).
+		Order("start_time ASC").
+		Find(&sessions).Error
+	return sessions, err
+}
+
 func (s *ClientAnalyticsService) getUsagePoints(db *gorm.DB, req ClientAnalyticsRequest) ([]ClientUsagePoint, error) {
 	rawSamples := make([]model.ClientUsageSample, 0)
 	err := applyClientAnalyticsFilters(db.Model(&model.ClientUsageSample{}), req).
@@ -284,6 +408,15 @@ func (s *ClientAnalyticsService) getUsagePoints(db *gorm.DB, req ClientAnalytics
 		return points[i].RecordedAt < points[j].RecordedAt
 	})
 	return points, nil
+}
+
+func (s *ClientAnalyticsService) getRawUsageSamples(db *gorm.DB, req ClientAnalyticsRequest) ([]model.ClientUsageSample, error) {
+	samples := make([]model.ClientUsageSample, 0)
+	err := applyClientAnalyticsFilters(db.Model(&model.ClientUsageSample{}), req).
+		Where("recorded_at >= ? AND recorded_at <= ?", req.Since, req.Until).
+		Order("recorded_at ASC").
+		Find(&samples).Error
+	return samples, err
 }
 
 func (s *ClientAnalyticsService) getAppUsage(db *gorm.DB, req ClientAnalyticsRequest) ([]ClientAppUsageSummary, bool, error) {
@@ -335,6 +468,25 @@ func analyticsBucketMillis(granularity string) int64 {
 		return int64(time.Hour / time.Millisecond)
 	}
 	return int64(time.Minute / time.Millisecond)
+}
+
+func writeCSVRow(writer *csv.Writer, row ...string) {
+	_ = writer.Write(row)
+}
+
+func formatAnalyticsCSVTime(value int64) string {
+	if value <= 0 {
+		return ""
+	}
+	return time.UnixMilli(value).Format("2006-01-02 15:04:05")
+}
+
+func sanitizeAnalyticsFilename(value string) string {
+	if value == "" {
+		return "sub-account"
+	}
+	replacer := strings.NewReplacer("\\", "-", "/", "-", ":", "-", "*", "-", "?", "-", "\"", "-", "<", "-", ">", "-", "|", "-", " ", "-", ";", "-", ",", "-")
+	return replacer.Replace(value)
 }
 
 func applyClientAnalyticsFilters(db *gorm.DB, req ClientAnalyticsRequest) *gorm.DB {

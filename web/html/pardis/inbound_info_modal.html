@@ -166,7 +166,7 @@
         </table>
         <a-divider>Usage Analytics</a-divider>
         <a-row :gutter="8" style="margin-bottom: 10px;">
-            <a-col :xs="24" :md="8" style="margin-bottom: 8px;">
+            <a-col :xs="24" :md="6" style="margin-bottom: 8px;">
                 <a-select v-model="infoModal.analytics.rangePreset" style="width: 100%;" @change="analyticsRangeChanged">
                     <a-select-option value="1h">Last 1 hour</a-select-option>
                     <a-select-option value="6h">Last 6 hours</a-select-option>
@@ -175,16 +175,21 @@
                     <a-select-option value="custom">Custom range</a-select-option>
                 </a-select>
             </a-col>
-            <a-col :xs="24" :md="8" style="margin-bottom: 8px;">
+            <a-col :xs="24" :md="6" style="margin-bottom: 8px;">
                 <a-select v-model="infoModal.analytics.granularity" style="width: 100%;" @change="analyticsRangeChanged">
                     <a-select-option value="minute">Minute buckets</a-select-option>
                     <a-select-option value="hour">Hourly buckets</a-select-option>
                 </a-select>
             </a-col>
-            <a-col :xs="24" :md="8" style="margin-bottom: 8px;">
+            <a-col :xs="24" :md="6" style="margin-bottom: 8px;">
                 <a-button style="width: 100%;" @click="infoModal.loadAnalytics()">
                     <a-icon type="reload"></a-icon>
                     Refresh
+                </a-button>
+            </a-col>
+            <a-col :xs="24" :md="6" style="margin-bottom: 8px;">
+                <a-button style="width: 100%;" icon="download" :loading="infoModal.analytics.downloading" @click="infoModal.downloadAnalyticsReport()">
+                    Download CSV
                 </a-button>
             </a-col>
         </a-row>
@@ -476,6 +481,7 @@
         return {
             loading: false,
             loaded: false,
+            downloading: false,
             rangePreset: '24h',
             granularity: 'minute',
             customRange: [],
@@ -557,6 +563,33 @@
                 this.analytics.report = msg.obj || emptyClientAnalytics().report;
             }
         },
+        async downloadAnalyticsReport() {
+            if (!this.clientSettings || !this.clientSettings.email) {
+                return;
+            }
+            const range = this.resolveAnalyticsRange();
+            this.analytics.downloading = true;
+            try {
+                const resp = await axios.post('/pardis/clientAnalytics/export', {
+                    email: this.clientSettings.email,
+                    inboundId: this.dbInbound.id,
+                    since: range.since,
+                    until: range.until,
+                    granularity: this.analytics.granularity,
+                }, { responseType: 'blob' });
+                const blob = new Blob([resp.data], { type: 'text/csv;charset=utf-8' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = this.analyticsFileName(range);
+                document.body.appendChild(link);
+                link.click();
+                URL.revokeObjectURL(link.href);
+                document.body.removeChild(link);
+            } catch (e) {
+                app.$message.error(e.toString());
+            }
+            this.analytics.downloading = false;
+        },
         resolveAnalyticsRange() {
             const now = new Date().getTime();
             const presetMs = {
@@ -574,6 +607,10 @@
             }
             const duration = presetMs[this.analytics.rangePreset] || presetMs['24h'];
             return { since: now - duration, until: now };
+        },
+        analyticsFileName(range) {
+            const email = this.clientSettings.email.replace(/[\\/:*?"<>|\s;,]+/g, '-');
+            return `client-analytics-${email}-${moment(range.since).format('YYYYMMDD-HHmm')}-${moment(range.until).format('YYYYMMDD-HHmm')}.csv`;
         },
         close() {
             infoModal.visible = false;
