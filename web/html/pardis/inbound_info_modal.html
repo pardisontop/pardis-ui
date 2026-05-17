@@ -561,11 +561,14 @@
         analytics: emptyClientAnalytics(),
         show(dbInbound, index) {
             this.index = index;
-            this.inbound = dbInbound.toInbound();
             this.dbInbound = new DBInbound(dbInbound);
+            this.inbound = this.dbInbound.toInbound();
             this.clientSettings = this.inbound.clients ? this.inbound.clients[index] : null;
             this.isExpired = this.inbound.clients ? this.inbound.isExpiry(index): this.dbInbound.isExpiry;
-            this.clientStats = this.inbound.clients ? this.dbInbound.clientStats.find(row => row.email === this.clientSettings.email) : [];
+            this.clientStats = this.inbound.clients && Array.isArray(this.dbInbound.clientStats) ? this.dbInbound.clientStats.find(row => row.email === this.clientSettings.email) : [];
+            if (this.clientStats && this.clientSettings) {
+                this.clientSettings.trackAnalytics = !!this.clientStats.trackAnalytics;
+            }
             this.analytics = emptyClientAnalytics();
             if (this.inbound.protocol == Protocols.WIREGUARD){
                 this.links = this.inbound.genInboundLinks(dbInbound.remark).split('\r\n')

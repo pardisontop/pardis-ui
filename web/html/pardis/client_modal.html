@@ -35,7 +35,7 @@
             this.okText = okText;
             this.isEdit = isEdit;
             this.dbInbound = new DBInbound(dbInbound);
-            this.inbound = dbInbound.toInbound();
+            this.inbound = this.dbInbound.toInbound();
             this.clients = this.inbound.clients;
             this.index = index === null ? this.clients.length : index;
             this.delayedStart = false;
@@ -47,7 +47,10 @@
             } else {
                 this.addClient(this.inbound.protocol, this.clients);
             }
-            this.clientStats = this.dbInbound.clientStats.find(row => row.email === this.clients[this.index].email);
+            this.clientStats = Array.isArray(this.dbInbound.clientStats) ? this.dbInbound.clientStats.find(row => row.email === this.clients[this.index].email) : null;
+            if (this.clientStats) {
+                this.clients[this.index].trackAnalytics = !!this.clientStats.trackAnalytics;
+            }
             this.confirm = confirm;
         },
         getClientId(protocol, client) {

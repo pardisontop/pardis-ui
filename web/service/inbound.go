@@ -30,6 +30,7 @@ func (s *InboundService) GetInbounds(userId int) ([]*model.Inbound, error) {
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
+	s.applyClientStatsToSettings(inbounds)
 	return inbounds, nil
 }
 
@@ -40,6 +41,7 @@ func (s *InboundService) GetAllInbounds() ([]*model.Inbound, error) {
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
+	s.applyClientStatsToSettings(inbounds)
 	return inbounds, nil
 }
 
@@ -85,6 +87,54 @@ func (s *InboundService) GetClients(inbound *model.Inbound) ([]model.Client, err
 		return nil, nil
 	}
 	return clients, nil
+}
+
+func (s *InboundService) applyClientStatsToSettings(inbounds []*model.Inbound) {
+	for _, inbound := range inbounds {
+		if inbound == nil || len(inbound.ClientStats) == 0 || inbound.Settings == "" {
+			continue
+		}
+		trackByEmail := make(map[string]bool, len(inbound.ClientStats))
+		for _, stats := range inbound.ClientStats {
+			if stats.Email != "" {
+				trackByEmail[stats.Email] = stats.TrackAnalytics
+			}
+		}
+
+		settings := map[string]interface{}{}
+		if err := json.Unmarshal([]byte(inbound.Settings), &settings); err != nil {
+			continue
+		}
+		clients, ok := settings["clients"].([]interface{})
+		if !ok {
+			continue
+		}
+		changed := false
+		for _, client := range clients {
+			clientMap, ok := client.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			email, _ := clientMap["email"].(string)
+			trackAnalytics, ok := trackByEmail[email]
+			if !ok {
+				continue
+			}
+			if clientMap["trackAnalytics"] != trackAnalytics {
+				clientMap["trackAnalytics"] = trackAnalytics
+				changed = true
+			}
+		}
+		if !changed {
+			continue
+		}
+		settings["clients"] = clients
+		data, err := json.MarshalIndent(settings, "", "  ")
+		if err != nil {
+			continue
+		}
+		inbound.Settings = string(data)
+	}
 }
 
 func (s *InboundService) getAllEmails() ([]string, error) {
@@ -298,10 +348,11 @@ func (s *InboundService) DelInbound(id int) (bool, error) {
 func (s *InboundService) GetInbound(id int) (*model.Inbound, error) {
 	db := database.GetDB()
 	inbound := &model.Inbound{}
-	err := db.Model(model.Inbound{}).First(inbound, id).Error
+	err := db.Model(model.Inbound{}).Preload("ClientStats").First(inbound, id).Error
 	if err != nil {
 		return nil, err
 	}
+	s.applyClientStatsToSettings([]*model.Inbound{inbound})
 	return inbound, nil
 }
 
@@ -1531,6 +1582,7 @@ func (s *InboundService) SearchInbounds(query string) ([]*model.Inbound, error) 
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
+	s.applyClientStatsToSettings(inbounds)
 	return inbounds, nil
 }
 
