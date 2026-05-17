@@ -1525,6 +1525,12 @@
                 clientStats = dbInbound.clientStats ? dbInbound.clientStats.find(stats => stats.email === email) : null;
                 return clientStats ? clientStats['enable'] : true;
             },
+            isClientAnalyticsTracked(dbInbound, client) {
+                if (!client || !client.email) return false;
+                clientStats = dbInbound.clientStats ? dbInbound.clientStats.find(stats => stats.email === client.email) : null;
+                if (clientStats) return !!clientStats.trackAnalytics;
+                return !!client.trackAnalytics;
+            },
             isClientOnline(email) {
                 return this.onlineClients.includes(email);
             },

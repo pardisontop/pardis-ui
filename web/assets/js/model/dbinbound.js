@@ -113,7 +113,18 @@ class DBInbound {
             sniffing: sniffing,
             clientStats: this.clientStats,
         };
-        return Inbound.fromJson(config);
+        const inbound = Inbound.fromJson(config);
+        if (inbound.clients && Array.isArray(this.clientStats)) {
+            inbound.clients.forEach(client => {
+                const stats = this.clientStats.find(row => row.email === client.email);
+                if (stats) {
+                    client.trackAnalytics = !!stats.trackAnalytics;
+                } else if (client.trackAnalytics == null) {
+                    client.trackAnalytics = false;
+                }
+            });
+        }
+        return inbound;
     }
 
     isMultiUser() {
