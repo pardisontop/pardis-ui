@@ -1008,8 +1008,13 @@ func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*xray.ClientTr
 		p.SetOnlineClients(onlineClients)
 	}
 
-	// Atomic SQL increment — eliminates read-modify-write race condition between nodes
-	for _, traffic := range traffics {
+	// Sort by email so all nodes lock rows in the same order — prevents deadlocks.
+	sorted := make([]*xray.ClientTraffic, len(traffics))
+	copy(sorted, traffics)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Email < sorted[j].Email })
+
+	// Atomic SQL increment — eliminates read-modify-write race condition between nodes.
+	for _, traffic := range sorted {
 		if traffic.Up == 0 && traffic.Down == 0 {
 			continue
 		}
