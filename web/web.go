@@ -274,6 +274,9 @@ func (s *Server) startTask() {
 		s.cron.AddJob("@every 10s", job.NewXrayTrafficJob())
 	}()
 
+	// Detect inbound config changes from shared DB and reload Xray on all nodes
+	s.cron.AddJob("@every 30s", job.NewXrayConfigSyncJob())
+
 	// Make a traffic condition every day, 8:30
 	var entry cron.EntryID
 	isTgbotenabled, err := s.settingService.GetTgbotenabled()

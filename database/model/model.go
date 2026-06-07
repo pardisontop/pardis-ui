@@ -41,7 +41,7 @@ type Inbound struct {
 	Protocol       Protocol `json:"protocol" form:"protocol"`
 	Settings       string   `json:"settings" form:"settings"`
 	StreamSettings string   `json:"streamSettings" form:"streamSettings"`
-	Tag            string   `json:"tag" form:"tag" gorm:"unique"`
+	Tag            string   `json:"tag" form:"tag" gorm:"size:191;unique"`
 	Sniffing       string   `json:"sniffing" form:"sniffing"`
 }
 
@@ -70,7 +70,7 @@ type Setting struct {
 type SubAccount struct {
 	Id         int    `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
 	Remark     string `json:"remark" form:"remark"`
-	SubId      string `json:"subId" form:"subId" gorm:"uniqueIndex"`
+	SubId      string `json:"subId" form:"subId" gorm:"size:191;uniqueIndex"`
 	Total      int64  `json:"total" form:"total"`
 	Duration   int64  `json:"duration" form:"duration"`
 	StartTime  int64  `json:"startTime" form:"startTime"`

@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -814,65 +815,93 @@ func (s *InboundService) UpdateInboundClient(data *model.Inbound, clientId strin
 }
 
 func (s *InboundService) AddTraffic(inboundTraffics []*xray.Traffic, clientTraffics []*xray.ClientTraffic) (error, bool) {
-	var err error
+	const maxRetries = 3
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		err, needRestart, retry := s.addTrafficOnce(inboundTraffics, clientTraffics)
+		if !retry {
+			return err, needRestart
+		}
+		logger.Warningf("AddTraffic deadlock on attempt %d/%d, retrying...", attempt, maxRetries)
+		time.Sleep(time.Duration(attempt*50) * time.Millisecond)
+	}
+	return fmt.Errorf("AddTraffic failed after %d attempts (persistent deadlock)", maxRetries), false
+}
+
+func (s *InboundService) addTrafficOnce(inboundTraffics []*xray.Traffic, clientTraffics []*xray.ClientTraffic) (retErr error, needRestart bool, shouldRetry bool) {
 	db := database.GetDB()
 	tx := db.Begin()
 
 	defer func() {
-		if err != nil {
+		if retErr != nil {
 			tx.Rollback()
 		} else {
 			tx.Commit()
 		}
 	}()
-	err = s.addInboundTraffic(tx, inboundTraffics)
-	if err != nil {
-		return err, false
+
+	if err := s.addInboundTraffic(tx, inboundTraffics); err != nil {
+		return err, false, isDeadlock(err)
 	}
-	err = s.addClientTraffic(tx, clientTraffics)
-	if err != nil {
-		return err, false
+	if err := s.addClientTraffic(tx, clientTraffics); err != nil {
+		return err, false, isDeadlock(err)
 	}
+
 	clientAnalyticsService := ClientAnalyticsService{}
-	err = clientAnalyticsService.RecordTraffic(tx, clientTraffics)
-	if err != nil {
+	if err := clientAnalyticsService.RecordTraffic(tx, clientTraffics); err != nil {
 		logger.Warning("Error in recording client analytics:", err)
 	}
 
 	subAccountService := SubAccountService{}
-	_, err = subAccountService.StartByClientTraffics(tx, clientTraffics)
-	if err != nil {
+	if _, err := subAccountService.StartByClientTraffics(tx, clientTraffics); err != nil {
 		logger.Warning("Error in starting sub accounts:", err)
 	}
 
-	needRestart0, count, err := s.autoRenewClients(tx)
+	nr0, count, err := s.autoRenewClients(tx)
 	if err != nil {
+		if isDeadlock(err) {
+			return err, false, true
+		}
 		logger.Warning("Error in renew clients:", err)
 	} else if count > 0 {
 		logger.Debugf("%v clients renewed", count)
 	}
 
-	needRestart1, count, err := s.disableInvalidClients(tx)
+	nr1, count, err := s.disableInvalidClients(tx)
 	if err != nil {
+		if isDeadlock(err) {
+			return err, false, true
+		}
 		logger.Warning("Error in disabling invalid clients:", err)
 	} else if count > 0 {
 		logger.Debugf("%v clients disabled", count)
 	}
 
-	needRestart2, count, err := subAccountService.DisableInvalid(tx)
+	nr2, count, err := subAccountService.DisableInvalid(tx)
 	if err != nil {
+		if isDeadlock(err) {
+			return err, false, true
+		}
 		logger.Warning("Error in disabling invalid sub accounts:", err)
 	} else if count > 0 {
 		logger.Debugf("%v sub accounts disabled", count)
 	}
 
-	needRestart3, count, err := s.disableInvalidInbounds(tx)
+	nr3, count, err := s.disableInvalidInbounds(tx)
 	if err != nil {
+		if isDeadlock(err) {
+			return err, false, true
+		}
 		logger.Warning("Error in disabling invalid inbounds:", err)
 	} else if count > 0 {
 		logger.Debugf("%v inbounds disabled", count)
 	}
-	return nil, (needRestart0 || needRestart1 || needRestart2 || needRestart3)
+
+	return nil, (nr0 || nr1 || nr2 || nr3), false
+}
+
+// isDeadlock returns true for MySQL deadlock errors (1213).
+func isDeadlock(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "Deadlock")
 }
 
 func (s *InboundService) addInboundTraffic(tx *gorm.DB, traffics []*xray.Traffic) error {
@@ -904,7 +933,6 @@ type newExpiryTime struct {
 
 func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*xray.ClientTraffic) (err error) {
 	if len(traffics) == 0 {
-		// Empty onlineUsers
 		if p != nil {
 			p.SetOnlineClients(nil)
 		}
@@ -923,7 +951,6 @@ func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*xray.ClientTr
 		if end > len(emails) {
 			end = len(emails)
 		}
-
 		batchClientTraffics := make([]*xray.ClientTraffic, 0, end-i)
 		err = tx.Model(xray.ClientTraffic{}).Where("email IN ?", emails[i:end]).Find(&batchClientTraffics).Error
 		if err != nil {
@@ -932,21 +959,28 @@ func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*xray.ClientTr
 		dbClientTraffics = append(dbClientTraffics, batchClientTraffics...)
 	}
 
-	// Avoid empty slice error
 	if len(dbClientTraffics) == 0 {
 		return nil
 	}
 
-	inboundExpiryTimeMap := make(map[int][]newExpiryTime, 0)
+	// Build O(1) lookup map
+	trafficByEmail := make(map[string]*xray.ClientTraffic, len(traffics))
+	for _, t := range traffics {
+		trafficByEmail[t.Email] = t
+	}
+
+	// Handle negative ExpiryTime (relative timer → absolute timestamp)
+	inboundExpiryTimeMap := make(map[int][]newExpiryTime)
+	expiryUpdates := make(map[string]int64)
 	for index, t := range dbClientTraffics {
 		if t.ExpiryTime < 0 {
 			newClientExpiryTime := (time.Now().Unix() * 1000) - int64(t.ExpiryTime)
-			newExpiryTime := newExpiryTime{
+			inboundExpiryTimeMap[t.InboundId] = append(inboundExpiryTimeMap[t.InboundId], newExpiryTime{
 				Email:         t.Email,
 				NewExpiryTime: newClientExpiryTime,
-			}
-			inboundExpiryTimeMap[t.InboundId] = append(inboundExpiryTimeMap[t.InboundId], newExpiryTime)
+			})
 			dbClientTraffics[index].ExpiryTime = newClientExpiryTime
+			expiryUpdates[t.Email] = newClientExpiryTime
 		}
 	}
 
@@ -955,36 +989,39 @@ func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*xray.ClientTr
 		return err
 	}
 
-	for dbTraffic_index := range dbClientTraffics {
-		for traffic_index := range traffics {
-			if dbClientTraffics[dbTraffic_index].Email == traffics[traffic_index].Email {
-				dbClientTraffics[dbTraffic_index].Up += traffics[traffic_index].Up
-				dbClientTraffics[dbTraffic_index].Down += traffics[traffic_index].Down
-
-				// Add user in onlineUsers array on traffic
-				if traffics[traffic_index].Up+traffics[traffic_index].Down > 0 {
-					onlineClients = append(onlineClients, traffics[traffic_index].Email)
-				}
-				break
-			}
+	// Save ExpiryTime changes for affected clients only (targeted update, not full Save)
+	for email, newExpiry := range expiryUpdates {
+		if err = tx.Model(xray.ClientTraffic{}).Where("email = ?", email).
+			Update("expiry_time", newExpiry).Error; err != nil {
+			return err
 		}
 	}
 
-	// Set onlineUsers
+	// Track online clients
+	for _, dbT := range dbClientTraffics {
+		if t, ok := trafficByEmail[dbT.Email]; ok && t.Up+t.Down > 0 {
+			onlineClients = append(onlineClients, dbT.Email)
+		}
+	}
+
 	if p != nil {
 		p.SetOnlineClients(onlineClients)
 	}
 
-	for i := 0; i < len(dbClientTraffics); i += safeBatchSize {
-		end := i + safeBatchSize
-		if end > len(dbClientTraffics) {
-			end = len(dbClientTraffics)
+	// Atomic SQL increment — eliminates read-modify-write race condition between nodes
+	for _, traffic := range traffics {
+		if traffic.Up == 0 && traffic.Down == 0 {
+			continue
 		}
-
-		err = tx.Save(dbClientTraffics[i:end]).Error
+		err = tx.Model(xray.ClientTraffic{}).
+			Where("email = ?", traffic.Email).
+			Updates(map[string]interface{}{
+				"up":   gorm.Expr("up + ?", traffic.Up),
+				"down": gorm.Expr("down + ?", traffic.Down),
+			}).Error
 		if err != nil {
-			logger.Warning("AddClientTraffic update data ", err)
-			return nil
+			logger.Warning("AddClientTraffic atomic update:", err)
+			return err
 		}
 	}
 
